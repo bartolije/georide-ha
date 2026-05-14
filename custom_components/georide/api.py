@@ -85,14 +85,45 @@ class GeoRideApiClient:
 
     async def get_trackers(self) -> list[dict[str, Any]]:
         """Return the raw list of trackers for the authenticated user."""
+        return await self._get_json_list("/user/trackers")
+
+    async def get_trips(
+        self,
+        tracker_id: int | str,
+        from_iso: str,
+        to_iso: str,
+    ) -> list[dict[str, Any]]:
+        """Return the raw list of trips for a tracker between two ISO 8601 datetimes.
+
+        from_iso / to_iso must be ISO 8601 strings (e.g. "2026-01-01T00:00:00Z").
+        The exact param names accepted by the API are not documented publicly, so
+        this method sends both common variants (`from`/`to` and `fromDate`/`toDate`)
+        and lets the server ignore the unknown ones.
+        """
+        path = f"/tracker/{tracker_id}/trips"
+        params = {
+            "from": from_iso,
+            "to": to_iso,
+            "fromDate": from_iso,
+            "toDate": to_iso,
+        }
+        return await self._get_json_list(path, params=params)
+
+    async def _get_json_list(
+        self,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Issue an authenticated GET and return the JSON body as a list of dicts."""
         if not self._token:
             raise GeoRideAuthError("Not authenticated; call login() first")
 
-        url = f"{API_HOST}/user/trackers"
+        url = f"{API_HOST}{path}"
         headers = {"Authorization": f"Bearer {self._token}"}
         try:
             async with self._session.get(
-                url, headers=headers, timeout=_TIMEOUT
+                url, headers=headers, params=params, timeout=_TIMEOUT
             ) as resp:
                 if resp.status in (401, 403):
                     raise GeoRideAuthError(
@@ -109,6 +140,6 @@ class GeoRideApiClient:
 
         if not isinstance(data, list):
             raise GeoRideError(
-                f"Unexpected trackers response shape: {type(data).__name__}"
+                f"Unexpected response shape for {path}: {type(data).__name__}"
             )
         return data

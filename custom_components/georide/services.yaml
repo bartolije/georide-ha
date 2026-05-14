@@ -1,0 +1,39 @@
+trip_summary:
+  name: Trip summary
+  description: >
+    Fetch trips for a date range and return aggregate stats (total km,
+    trip count, km per month, max top speed, max lean angle). Use with
+    `response_variable:` in a script or automation to consume the result.
+  fields:
+    start_date:
+      name: Start date
+      description: First day (inclusive, UTC).
+      required: true
+      example: "2026-01-01"
+      selector:
+        date:
+    end_date:
+      name: End date
+      description: Last day (inclusive, UTC).
+      required: true
+      example: "2026-05-14"
+      selector:
+        date:
+    tracker_id:
+      name: Tracker ID
+      description: >
+        Restrict to a single tracker. Omit to aggregate across every
+        tracker on every configured GeoRide account.
+      required: false
+      example: "12345"
+      selector:
+        text:
+    include_trips:
+      name: Include raw trips
+      description: >
+        Include the raw trip list in the response (heavier payload).
+        Off by default; enable when you want to render a map or table.
+      required: false
+      default: false
+      selector:
+        boolean:
