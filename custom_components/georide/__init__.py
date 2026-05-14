@@ -8,6 +8,7 @@ from homeassistant.const import CONF_TOKEN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import GeoRideApiClient
 from .const import DOMAIN, PLATFORMS
@@ -15,6 +16,18 @@ from .coordinator import GeoRideCoordinator
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register integration-wide services (independent of any config entry).
+
+    Per the Bronze tier rule `action-setup`, services are registered once at
+    integration setup rather than on each config entry. The handler itself
+    is idempotent so calling this for the first entry, then for subsequent
+    ones, has no extra cost.
+    """
+    await async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -47,7 +60,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         len(coordinator.data),
     )
 
-    await async_setup_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -37,49 +37,14 @@ from homeassistant.helpers.typing import StateType
 
 from .coordinator import GeoRideCoordinator
 from .entity import GeoRideBeaconEntity, GeoRideEntity
+from .helpers import (
+    meters_to_km as _meters_to_km,
+    number as _number,
+    parse_timestamp as _parse_timestamp,
+    voltage_to_battery_pct as _voltage_to_pct,
+)
 
 PARALLEL_UPDATES = 0
-
-
-# Approximate moto-battery curve: 11.0 V = empty, 12.7 V = full.
-# Linear interpolation; gives a usable badge percentage even though real
-# discharge curves are non-linear.
-_BATTERY_EMPTY_V = 11.0
-_BATTERY_FULL_V = 12.7
-
-
-def _meters_to_km(value: Any) -> float | None:
-    if not isinstance(value, (int, float)):
-        return None
-    return round(float(value) / 1000.0, 2)
-
-
-def _number(value: Any) -> StateType:
-    return value if isinstance(value, (int, float)) else None
-
-
-def _voltage_to_pct(value: Any) -> int | None:
-    if not isinstance(value, (int, float)):
-        return None
-    span = _BATTERY_FULL_V - _BATTERY_EMPTY_V
-    pct = (float(value) - _BATTERY_EMPTY_V) / span * 100.0
-    return max(0, min(100, round(pct)))
-
-
-def _parse_timestamp(value: Any) -> datetime | None:
-    """Parse an ISO 8601 string or an epoch (s or ms) into an aware datetime."""
-    if isinstance(value, (int, float)):
-        try:
-            seconds = float(value) / 1000.0 if value > 1e12 else float(value)
-            return datetime.fromtimestamp(seconds, tz=timezone.utc)
-        except (ValueError, OSError, OverflowError):
-            return None
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-    return None
 
 
 @dataclass(frozen=True, kw_only=True)

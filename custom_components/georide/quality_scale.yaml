@@ -1,0 +1,84 @@
+rules:
+  # 🥉 Bronze
+  action-setup: done
+  appropriate-polling: done
+  brands:
+    status: todo
+    comment: Pending PR to home-assistant/brands with the GeoRide logo.
+  common-modules: done
+  config-flow-test-coverage:
+    status: todo
+    comment: Requires pytest-homeassistant-custom-component on a Python 3.12+ venv. Planned in the next slice.
+  config-flow: done
+  dependency-transparency: done
+  docs-actions: done
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+
+  # 🥈 Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  reauthentication-flow: done
+  test-coverage:
+    status: todo
+    comment: Pure helpers + stats covered (69 tests). Coordinator, config flow and entities need HA test infra.
+
+  # 🥇 Gold
+  devices: done
+  diagnostics: done
+  discovery:
+    status: exempt
+    comment: GeoRide is a cloud service; no LAN discovery applies.
+  discovery-update-info:
+    status: exempt
+    comment: Same as discovery.
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  dynamic-devices:
+    status: todo
+    comment: A coordinator listener that adds entities for newly-paired trackers / beacons without restart.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default: done
+  entity-translations: done
+  exception-translations:
+    status: todo
+    comment: HomeAssistantError messages are English strings; need translation_key support.
+  icon-translations:
+    status: exempt
+    comment: HA device_class defaults provide sensible icons.
+  reconfiguration-flow: done
+  repair-issues:
+    status: todo
+    comment: Plan to raise repair issues on persistent auth fail and on subscription expiring within 7 days.
+  stale-devices: done
+
+  # 🏆 Platinum
+  async-dependency:
+    status: exempt
+    comment: No third-party dependency; the API client is in-tree and async.
+  inject-websession:
+    status: exempt
+    comment: Same as async-dependency.
+  strict-typing:
+    status: todo
+    comment: TypedDict for tracker/trip payloads + py.typed marker + mypy strict in CI pending.
