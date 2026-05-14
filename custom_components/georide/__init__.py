@@ -29,7 +29,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.runtime_data = coordinator
 
-    _cleanup_stale_devices(hass, entry, set(coordinator.data))
+    _cleanup_stale_devices(
+        hass,
+        entry,
+        tracker_ids=set(coordinator.data),
+        beacon_ids={
+            b["id"]
+            for beacons in coordinator.beacons.values()
+            for b in beacons
+            if isinstance(b.get("id"), int)
+        },
+    )
 
     _LOGGER.info(
         "GeoRide: setup complete for %s with %d tracker(s)",
@@ -48,15 +58,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 def _cleanup_stale_devices(
-    hass: HomeAssistant, entry: ConfigEntry, current_tracker_ids: set[int]
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    *,
+    tracker_ids: set[int],
+    beacon_ids: set[int],
 ) -> None:
-    """Drop devices whose tracker_id is no longer returned by GeoRide.
+    """Drop devices whose tracker_id or beacon_id is no longer in GeoRide.
 
-    Runs once at setup. Dynamic addition of newly-appeared trackers between
-    setups is a separate concern handled by a future coordinator listener.
+    Runs once at setup. Dynamic addition of newly-appeared trackers / beacons
+    between setups is a separate concern handled by a future coordinator
+    listener.
     """
     device_registry = dr.async_get(hass)
-    valid_identifiers = {(DOMAIN, str(tid)) for tid in current_tracker_ids}
+    valid_identifiers = {(DOMAIN, str(tid)) for tid in tracker_ids} | {
+        (DOMAIN, f"beacon-{bid}") for bid in beacon_ids
+    }
     for device in dr.async_entries_for_config_entry(
         device_registry, entry.entry_id
     ):

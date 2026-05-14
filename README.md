@@ -84,6 +84,24 @@ Trackers that disappear from your GeoRide account (sold, transferred) are
 automatically removed from the Home Assistant device registry on the next
 restart.
 
+### Beacons
+
+Every Bluetooth beacon paired with a tracker (key fob, top-case sensor,
+TPMS, …) shows up as a **separate device** in Home Assistant, nested
+under its tracker via `via_device`. For each beacon:
+
+| Platform | Entity | What it shows |
+|---|---|---|
+| `sensor` | Battery | Beacon battery in %. |
+| `sensor` | Last battery report | Timestamp of the last battery-level update. |
+| `binary_sensor` | Firmware update available | `DeviceClass.UPDATE` — on when GeoRide reports the beacon firmware is out of date. |
+
+Beacon model (e.g. `gen-1`) is shown on the device card. The MAC address
+is attached as a HA connection so it appears in the device info.
+
+Beacons that you unpair in the GeoRide app are removed from Home
+Assistant on the next restart, same as for trackers.
+
 ## Data updates
 
 The integration polls GeoRide every 60 seconds. There is no real-time push

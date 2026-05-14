@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import GeoRideCoordinator
-from .entity import GeoRideEntity
+from .entity import GeoRideBeaconEntity, GeoRideEntity
 
 PARALLEL_UPDATES = 0
 
@@ -65,17 +65,42 @@ BINARY_SENSORS: tuple[GeoRideBinarySensorEntityDescription, ...] = (
 )
 
 
+BEACON_BINARY_SENSORS: tuple[GeoRideBinarySensorEntityDescription, ...] = (
+    GeoRideBinarySensorEntityDescription(
+        key="firmware_update",
+        translation_key="beacon_firmware_update",
+        device_class=BinarySensorDeviceClass.UPDATE,
+        # UPDATE device_class: on = update available. GeoRide's isUpdated
+        # field is True when firmware is up to date, so we invert.
+        value_fn=lambda d: (
+            (not d["isUpdated"]) if isinstance(d.get("isUpdated"), bool) else None
+        ),
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: GeoRideCoordinator = entry.runtime_data
-    async_add_entities(
-        GeoRideBinarySensor(coordinator, tracker_id, desc)
-        for tracker_id in coordinator.data
-        for desc in BINARY_SENSORS
-    )
+    entities: list[BinarySensorEntity] = []
+    for tracker_id in coordinator.data:
+        entities.extend(
+            GeoRideBinarySensor(coordinator, tracker_id, desc)
+            for desc in BINARY_SENSORS
+        )
+    for tracker_id, beacons in coordinator.beacons.items():
+        for beacon in beacons:
+            beacon_id = beacon.get("id")
+            if not isinstance(beacon_id, int):
+                continue
+            entities.extend(
+                GeoRideBeaconBinarySensor(coordinator, tracker_id, beacon_id, desc)
+                for desc in BEACON_BINARY_SENSORS
+            )
+    async_add_entities(entities)
 
 
 class GeoRideBinarySensor(GeoRideEntity, BinarySensorEntity):
@@ -94,3 +119,22 @@ class GeoRideBinarySensor(GeoRideEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         return self.entity_description.value_fn(self._tracker)
+
+
+class GeoRideBeaconBinarySensor(GeoRideBeaconEntity, BinarySensorEntity):
+    entity_description: GeoRideBinarySensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: GeoRideCoordinator,
+        tracker_id: int,
+        beacon_id: int,
+        description: GeoRideBinarySensorEntityDescription,
+    ) -> None:
+        super().__init__(coordinator, tracker_id, beacon_id)
+        self.entity_description = description
+        self._attr_unique_id = f"beacon-{beacon_id}-{description.key}"
+
+    @property
+    def is_on(self) -> bool | None:
+        return self.entity_description.value_fn(self._beacon)

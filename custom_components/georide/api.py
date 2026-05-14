@@ -144,6 +144,17 @@ class GeoRideApiClient:
             )
         return data
 
+    async def get_tracker_beacons(
+        self, tracker_id: int | str
+    ) -> list[dict[str, Any]]:
+        """Return the raw list of beacons paired with the tracker.
+
+        GeoRide beacons are small Bluetooth tags (key fob, top-case, sensors)
+        that the tracker listens for. The exact shape returned by the API
+        is undocumented, so callers should treat the list as opaque dicts.
+        """
+        return await self._get_json_list(f"/tracker/{tracker_id}/beacon")
+
     async def lock_tracker(self, tracker_id: int | str) -> None:
         """Lock the tracker via POST /tracker/{id}/lock."""
         await self._post(f"/tracker/{tracker_id}/lock")

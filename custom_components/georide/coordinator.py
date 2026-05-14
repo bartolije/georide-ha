@@ -49,7 +49,14 @@ _ALARM_FLAGS: tuple[tuple[str, str], ...] = (
 
 
 class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
-    """Polls /user/trackers and indexes the returned list by trackerId."""
+    """Polls /user/trackers and indexes the returned list by trackerId.
+
+    Also fetches each tracker's beacons (key fob, top-case, TPMS, anything
+    paired to the tracker) and stores them on `self.beacons`, keyed by
+    tracker_id. Beacons are not part of `data` because they share a
+    different lifecycle (rarely change) and we don't want them to break
+    the typed `data` shape consumed by other modules.
+    """
 
     config_entry: ConfigEntry
 
@@ -67,6 +74,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             config_entry=entry,
         )
         self.client = client
+        self.beacons: dict[int, list[dict[str, Any]]] = {}
 
     async def _async_update_data(self) -> TrackersById:
         try:
@@ -87,12 +95,36 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
                 continue
             indexed[int(tid)] = tracker
 
+        await self._refresh_beacons(indexed)
+
         # `self.data` is the previous snapshot here (set by the base class
         # AFTER this method returns), so we can diff against it for free.
         if self.data is not None:
             self._fire_state_change_events(self.data, indexed)
 
         return indexed
+
+    async def _refresh_beacons(self, trackers: TrackersById) -> None:
+        """Fetch beacons for every tracker that reports hasBeacon=True.
+
+        Per-tracker failures do not break the overall refresh; we keep the
+        previous beacon snapshot for that tracker in that case.
+        """
+        new_beacons: dict[int, list[dict[str, Any]]] = {}
+        for tid, tracker in trackers.items():
+            if not tracker.get("hasBeacon"):
+                new_beacons[tid] = []
+                continue
+            try:
+                new_beacons[tid] = await self.client.get_tracker_beacons(tid)
+            except (GeoRideAuthError, GeoRideConnectionError, GeoRideError) as err:
+                _LOGGER.warning(
+                    "GeoRide beacons fetch failed for tracker %s: %s — keeping last snapshot",
+                    tid,
+                    err,
+                )
+                new_beacons[tid] = self.beacons.get(tid, [])
+        self.beacons = new_beacons
 
     def _fire_state_change_events(
         self, previous: TrackersById, current: TrackersById

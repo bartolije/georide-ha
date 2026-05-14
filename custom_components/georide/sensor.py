@@ -36,7 +36,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from .coordinator import GeoRideCoordinator
-from .entity import GeoRideEntity
+from .entity import GeoRideBeaconEntity, GeoRideEntity
 
 PARALLEL_UPDATES = 0
 
@@ -159,17 +159,45 @@ SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
 )
 
 
+BEACON_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
+    GeoRideSensorEntityDescription(
+        key="battery",
+        translation_key="beacon_battery",
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        value_fn=lambda d: _number(d.get("batteryLevel")),
+    ),
+    GeoRideSensorEntityDescription(
+        key="last_seen",
+        translation_key="beacon_last_seen",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda d: _parse_timestamp(d.get("lastBatteryLevelUpdate")),
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: GeoRideCoordinator = entry.runtime_data
-    async_add_entities(
-        GeoRideSensor(coordinator, tracker_id, desc)
-        for tracker_id in coordinator.data
-        for desc in SENSORS
-    )
+    entities: list[SensorEntity] = []
+    for tracker_id in coordinator.data:
+        entities.extend(
+            GeoRideSensor(coordinator, tracker_id, desc) for desc in SENSORS
+        )
+    for tracker_id, beacons in coordinator.beacons.items():
+        for beacon in beacons:
+            beacon_id = beacon.get("id")
+            if not isinstance(beacon_id, int):
+                continue
+            entities.extend(
+                GeoRideBeaconSensor(coordinator, tracker_id, beacon_id, desc)
+                for desc in BEACON_SENSORS
+            )
+    async_add_entities(entities)
 
 
 class GeoRideSensor(GeoRideEntity, SensorEntity):
@@ -188,3 +216,22 @@ class GeoRideSensor(GeoRideEntity, SensorEntity):
     @property
     def native_value(self) -> StateType | datetime:
         return self.entity_description.value_fn(self._tracker)
+
+
+class GeoRideBeaconSensor(GeoRideBeaconEntity, SensorEntity):
+    entity_description: GeoRideSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: GeoRideCoordinator,
+        tracker_id: int,
+        beacon_id: int,
+        description: GeoRideSensorEntityDescription,
+    ) -> None:
+        super().__init__(coordinator, tracker_id, beacon_id)
+        self.entity_description = description
+        self._attr_unique_id = f"beacon-{beacon_id}-{description.key}"
+
+    @property
+    def native_value(self) -> StateType | datetime:
+        return self.entity_description.value_fn(self._beacon)

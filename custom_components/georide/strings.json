@@ -40,7 +40,8 @@
       "moving": { "name": "Moving" },
       "stolen": { "name": "Stolen" },
       "crashed": { "name": "Crashed" },
-      "has_beacon": { "name": "Has beacon" }
+      "has_beacon": { "name": "Has beacon" },
+      "beacon_firmware_update": { "name": "Firmware update available" }
     },
     "sensor": {
       "odometer": { "name": "Odometer" },
@@ -50,7 +51,9 @@
       "altitude": { "name": "Altitude" },
       "external_battery_voltage": { "name": "External battery voltage" },
       "internal_battery_voltage": { "name": "Internal battery voltage" },
-      "subscription_expires": { "name": "Subscription expires" }
+      "subscription_expires": { "name": "Subscription expires" },
+      "beacon_battery": { "name": "Battery" },
+      "beacon_last_seen": { "name": "Last battery report" }
     }
   },
   "services": {
