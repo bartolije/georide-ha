@@ -5,3 +5,6 @@ from homeassistant.const import Platform
 
 DOMAIN = "georide"
 PLATFORMS: list[Platform] = []
+
+API_HOST = "https://api.georide.com"
+API_TIMEOUT = 30
