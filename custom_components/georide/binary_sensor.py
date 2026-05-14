@@ -1,4 +1,4 @@
-"""GeoRide binary_sensor platform: lock, moving, stolen, crashed."""
+"""GeoRide binary_sensor platform: lock, moving, stolen, crashed, has_beacon."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -11,6 +11,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -61,6 +62,13 @@ BINARY_SENSORS: tuple[GeoRideBinarySensorEntityDescription, ...] = (
         translation_key="crashed",
         device_class=BinarySensorDeviceClass.PROBLEM,
         value_fn=lambda d: _bool(d.get("isCrashed")),
+    ),
+    GeoRideBinarySensorEntityDescription(
+        key="has_beacon",
+        translation_key="has_beacon",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _bool(d.get("hasBeacon")),
     ),
 )
 

@@ -6,6 +6,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_TOKEN
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import GeoRideApiClient
@@ -28,6 +29,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.runtime_data = coordinator
 
+    _cleanup_stale_devices(hass, entry, set(coordinator.data))
+
     _LOGGER.info(
         "GeoRide: setup complete for %s with %d tracker(s)",
         entry.title,
@@ -42,3 +45,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+def _cleanup_stale_devices(
+    hass: HomeAssistant, entry: ConfigEntry, current_tracker_ids: set[int]
+) -> None:
+    """Drop devices whose tracker_id is no longer returned by GeoRide.
+
+    Runs once at setup. Dynamic addition of newly-appeared trackers between
+    setups is a separate concern handled by a future coordinator listener.
+    """
+    device_registry = dr.async_get(hass)
+    valid_identifiers = {(DOMAIN, str(tid)) for tid in current_tracker_ids}
+    for device in dr.async_entries_for_config_entry(
+        device_registry, entry.entry_id
+    ):
+        if not any(ident in valid_identifiers for ident in device.identifiers):
+            _LOGGER.info(
+                "Removing stale GeoRide device %s (no longer in account)",
+                device.name or device.id,
+            )
+            device_registry.async_update_device(
+                device.id, remove_config_entry_id=entry.entry_id
+            )

@@ -30,7 +30,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
-STEP_REAUTH_DATA_SCHEMA = vol.Schema({vol.Required(CONF_PASSWORD): str})
+STEP_PASSWORD_ONLY_SCHEMA = vol.Schema({vol.Required(CONF_PASSWORD): str})
 
 
 async def _authenticate(
@@ -112,7 +112,33 @@ class GeoRideConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=STEP_REAUTH_DATA_SCHEMA,
+            data_schema=STEP_PASSWORD_ONLY_SCHEMA,
+            description_placeholders={"email": email},
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """User-initiated reconfigure (Settings → Devices → Configure)."""
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+        email = entry.data[CONF_EMAIL]
+
+        if user_input is not None:
+            token, error = await _authenticate(
+                self.hass, email, user_input[CONF_PASSWORD]
+            )
+            if error:
+                errors["base"] = error
+            else:
+                return self.async_update_reload_and_abort(
+                    entry, data={**entry.data, CONF_TOKEN: token}
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=STEP_PASSWORD_ONLY_SCHEMA,
             description_placeholders={"email": email},
             errors=errors,
         )

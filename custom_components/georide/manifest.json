@@ -1,7 +1,7 @@
 {
   "domain": "georide",
   "name": "GeoRide",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "documentation": "https://github.com/bartolije/georide-ha",
   "issue_tracker": "https://github.com/bartolije/georide-ha/issues",
   "codeowners": ["@bartolije"],
