@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="GeoRide" width="380">
+</p>
+
 # GeoRide for Home Assistant
 
 Unofficial Home Assistant integration for [GeoRide](https://georide.fr)
