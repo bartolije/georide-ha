@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "live: test hits the real GeoRide API (skipped without credentials)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

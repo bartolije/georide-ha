@@ -10,3 +10,17 @@ env/
 .vscode/
 *.swp
 .DS_Store
+
+# Local secrets and credentials — NEVER commit
+.env
+.env.*
+!.env.example
+*.local.env
+tests/secrets.local.env
+tests/.secrets/
+.secrets/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
