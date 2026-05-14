@@ -8,6 +8,13 @@
           "email": "Email",
           "password": "Password"
         }
+      },
+      "reauth_confirm": {
+        "title": "GeoRide — re-authentication required",
+        "description": "Your GeoRide token expired. Re-enter the password for {email}.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -16,7 +23,22 @@
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This account is already configured"
+      "already_configured": "This account is already configured",
+      "reauth_successful": "Re-authentication successful"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "lock": { "name": "Lock" },
+      "moving": { "name": "Moving" },
+      "stolen": { "name": "Stolen" },
+      "crashed": { "name": "Crashed" }
+    },
+    "sensor": {
+      "odometer": { "name": "Odometer" },
+      "speed": { "name": "Speed" },
+      "internal_battery_voltage": { "name": "Internal battery voltage" },
+      "external_battery_voltage": { "name": "External battery voltage" }
     }
   }
 }

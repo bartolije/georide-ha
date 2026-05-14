@@ -150,25 +150,24 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         requested = call.data.get("tracker_id")
         include_trips = call.data["include_trips"]
 
-        domain_data: dict[str, dict[str, Any]] = hass.data.get(DOMAIN, {})
-        if not domain_data:
+        entries = [
+            e
+            for e in hass.config_entries.async_entries(DOMAIN)
+            if hasattr(e, "runtime_data") and e.runtime_data is not None
+        ]
+        if not entries:
             raise HomeAssistantError("GeoRide integration is not configured")
 
         per_tracker: dict[str, Any] = {}
         all_trips: list[dict[str, Any]] = []
         matched = False
 
-        for entry_data in domain_data.values():
-            client: GeoRideApiClient = entry_data["client"]
-            trackers: list[dict[str, Any]] = entry_data["trackers"]
+        for entry in entries:
+            coordinator = entry.runtime_data  # GeoRideCoordinator
+            client: GeoRideApiClient = coordinator.client
+            trackers_by_id: dict[int, dict[str, Any]] = coordinator.data or {}
 
-            for tracker in trackers:
-                tid = tracker.get("trackerId") or tracker.get("id")
-                if tid is None:
-                    _LOGGER.warning(
-                        "Tracker without trackerId; keys=%s", sorted(tracker.keys())
-                    )
-                    continue
+            for tid, tracker in trackers_by_id.items():
                 if requested is not None and str(requested) != str(tid):
                     continue
                 matched = True
