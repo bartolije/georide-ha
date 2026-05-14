@@ -1,0 +1,13 @@
+{
+  "domain": "georide",
+  "name": "GeoRide",
+  "version": "0.1.0",
+  "documentation": "https://github.com/bartolije/georide-ha",
+  "issue_tracker": "https://github.com/bartolije/georide-ha/issues",
+  "codeowners": ["@bartolije"],
+  "config_flow": true,
+  "iot_class": "cloud_polling",
+  "integration_type": "hub",
+  "requirements": [],
+  "dependencies": []
+}
