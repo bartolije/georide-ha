@@ -25,10 +25,6 @@ def _bool(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
-def _bool_invert(value: Any) -> bool | None:
-    return (not value) if isinstance(value, bool) else None
-
-
 @dataclass(frozen=True, kw_only=True)
 class GeoRideBinarySensorEntityDescription(BinarySensorEntityDescription):
     """A binary_sensor description plus a value extractor."""
@@ -37,14 +33,10 @@ class GeoRideBinarySensorEntityDescription(BinarySensorEntityDescription):
 
 
 BINARY_SENSORS: tuple[GeoRideBinarySensorEntityDescription, ...] = (
-    GeoRideBinarySensorEntityDescription(
-        key="lock",
-        translation_key="lock",
-        device_class=BinarySensorDeviceClass.LOCK,
-        # device_class LOCK semantics: True = unlocked, False = locked.
-        # GeoRide gives isLocked, so we invert.
-        value_fn=lambda d: _bool_invert(d.get("isLocked")),
-    ),
+    # NOTE: the previous `lock` binary_sensor was replaced by the dedicated
+    # `lock` platform in v0.4.0. If you upgrade from <=0.3.0 and have
+    # automations bound to `binary_sensor.<bike>_lock`, migrate them to
+    # `lock.<bike>` (state is now "locked" / "unlocked" instead of on/off).
     GeoRideBinarySensorEntityDescription(
         key="moving",
         translation_key="moving",

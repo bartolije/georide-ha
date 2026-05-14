@@ -143,3 +143,46 @@ class GeoRideApiClient:
                 f"Unexpected response shape for {path}: {type(data).__name__}"
             )
         return data
+
+    async def lock_tracker(self, tracker_id: int | str) -> None:
+        """Lock the tracker via POST /tracker/{id}/lock."""
+        await self._post(f"/tracker/{tracker_id}/lock")
+
+    async def unlock_tracker(self, tracker_id: int | str) -> None:
+        """Unlock the tracker via POST /tracker/{id}/unlock."""
+        await self._post(f"/tracker/{tracker_id}/unlock")
+
+    async def toggle_lock(self, tracker_id: int | str) -> None:
+        """Toggle the tracker lock state via POST /tracker/{id}/toggleLock."""
+        await self._post(f"/tracker/{tracker_id}/toggleLock")
+
+    async def siren_on(self, tracker_id: int | str) -> None:
+        """Turn the sonor alarm ON via POST /tracker/{id}/sonor-alarm/on."""
+        await self._post(f"/tracker/{tracker_id}/sonor-alarm/on")
+
+    async def siren_off(self, tracker_id: int | str) -> None:
+        """Turn the sonor alarm OFF via POST /tracker/{id}/sonor-alarm/off."""
+        await self._post(f"/tracker/{tracker_id}/sonor-alarm/off")
+
+    async def _post(self, path: str) -> None:
+        """Issue an authenticated POST with no body. Used for control endpoints."""
+        if not self._token:
+            raise GeoRideAuthError("Not authenticated; call login() first")
+
+        url = f"{API_HOST}{path}"
+        headers = {"Authorization": f"Bearer {self._token}"}
+        try:
+            async with self._session.post(
+                url, headers=headers, timeout=_TIMEOUT
+            ) as resp:
+                if resp.status in (401, 403):
+                    raise GeoRideAuthError(
+                        f"Token rejected by GeoRide (HTTP {resp.status})"
+                    )
+                resp.raise_for_status()
+        except ClientResponseError as err:
+            if err.status in (401, 403):
+                raise GeoRideAuthError(str(err)) from err
+            raise GeoRideConnectionError(str(err)) from err
+        except ClientError as err:
+            raise GeoRideConnectionError(str(err)) from err

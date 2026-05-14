@@ -37,7 +37,6 @@
   },
   "entity": {
     "binary_sensor": {
-      "lock": { "name": "Lock" },
       "moving": { "name": "Moving" },
       "stolen": { "name": "Stolen" },
       "crashed": { "name": "Crashed" },

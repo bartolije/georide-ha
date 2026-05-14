@@ -37,9 +37,11 @@ if "homeassistant.const" not in sys.modules:
     _ha_const = types.ModuleType("homeassistant.const")
 
     class _Platform:  # only the names const.py / __init__.py reference
-        DEVICE_TRACKER = "device_tracker"
-        SENSOR = "sensor"
         BINARY_SENSOR = "binary_sensor"
+        DEVICE_TRACKER = "device_tracker"
+        LOCK = "lock"
+        SENSOR = "sensor"
+        SIREN = "siren"
 
     _ha_const.Platform = _Platform
     sys.modules["homeassistant.const"] = _ha_const

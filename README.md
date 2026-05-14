@@ -68,11 +68,17 @@ the following entities:
 | `sensor` | External battery voltage | Diagnostic, raw V. |
 | `sensor` | Internal battery voltage | Diagnostic, disabled by default. |
 | `sensor` | Subscription expires | Diagnostic, disabled by default. |
-| `binary_sensor` | Lock | `DeviceClass.LOCK` — on = unlocked, off = locked. |
+| `lock` | (tracker name) | Lock / unlock the GeoRide remotely. State follows `isLocked`. |
+| `siren` | Siren | Trigger or stop the sonor alarm. Write-only — state is not reported back by GeoRide. |
 | `binary_sensor` | Moving | `DeviceClass.MOVING`. |
 | `binary_sensor` | Stolen | `DeviceClass.SAFETY` — on = reported stolen. |
 | `binary_sensor` | Crashed | `DeviceClass.PROBLEM` — on = crash detected. |
 | `binary_sensor` | Has beacon | Diagnostic, disabled by default. |
+
+> **Breaking change in 0.4.0:** the previous `binary_sensor.<bike>_lock`
+> was replaced by the dedicated `lock.<bike>` entity. Migrate any
+> automation that referenced `binary_sensor.<bike>_lock` — the new
+> entity uses `state: locked` / `unlocked` instead of `on` / `off`.
 
 Trackers that disappear from your GeoRide account (sold, transferred) are
 automatically removed from the Home Assistant device registry on the next
@@ -144,6 +150,35 @@ aggregate:
 Pass `tracker_id` to restrict to one tracker; `include_trips: true` adds the
 raw trip list so a Lovelace card can render them on a map.
 
+## Events
+
+The coordinator compares each polling snapshot with the previous one and
+fires Home Assistant events on transitions. Useful for event-driven
+automations that should not have to poll an entity's state.
+
+| Event | `event_data` keys | Fired when |
+|---|---|---|
+| `georide_lock_event` | `device_id`, `tracker_id`, `tracker_name`, `is_locked` | `isLocked` flips. |
+| `georide_moving_event` | `device_id`, `tracker_id`, `tracker_name`, `moving` | `moving` flips. |
+| `georide_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type` | `isStolen` / `isCrashed` / `hasTheftCaseOpened` flips False → True. `type` is `"stolen"` / `"crashed"` / `"theft_case_opened"`. |
+
+### Example: notify on any alarm transition
+
+```yaml
+automation:
+  - alias: GeoRide alarm
+    trigger:
+      platform: event
+      event_type: georide_alarm_event
+    action:
+      service: notify.mobile_app_my_phone
+      data:
+        title: "GeoRide alarm: {{ trigger.event.data.type }}"
+        message: >
+          {{ trigger.event.data.tracker_name }} just triggered
+          a {{ trigger.event.data.type }} alarm.
+```
+
 ## Examples
 
 ### Notify when the bike starts moving while you are away
@@ -184,12 +219,13 @@ automation:
 ## Known limitations
 
 - **No real-time push.** Polling 60s. Alarm events that happen between two
-  polls may be missed or delayed.
-- **Lock/unlock is read-only.** This version does not expose a switch to
-  lock or unlock the tracker. Planned.
+  polls may be missed or delayed. WebSocket support is on the roadmap.
+- **Siren state is write-only.** GeoRide's API does not report the siren
+  back, so the entity always shows as unknown. The integration trusts the
+  last command issued.
 - **Battery percentage is approximated** from the external voltage with a
-  linear 11.0 V → 0 %, 12.7 V → 100 % curve. Real LiPo discharge curves are
-  non-linear; treat as an estimate.
+  linear 11.0 V → 0 %, 12.7 V → 100 % curve. Real lead-acid discharge
+  curves are non-linear; treat as an estimate.
 - **No 2FA support.** If your GeoRide account uses 2FA, the config flow
   will fail. Planned.
 

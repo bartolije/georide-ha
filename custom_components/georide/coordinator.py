@@ -1,4 +1,10 @@
-"""DataUpdateCoordinator for GeoRide trackers."""
+"""DataUpdateCoordinator for GeoRide trackers.
+
+Polls /user/trackers every 60s, indexes the result by trackerId, and fires
+Home Assistant events when state transitions are detected (lock toggle,
+moving start/stop, alarm conditions). Events let users write event-driven
+automations without polling entities themselves.
+"""
 from __future__ import annotations
 
 import logging
@@ -8,6 +14,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -19,13 +26,26 @@ from .api import (
     GeoRideConnectionError,
     GeoRideError,
 )
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    EVENT_ALARM,
+    EVENT_LOCK,
+    EVENT_MOVING,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 UPDATE_INTERVAL = timedelta(seconds=60)
 
 TrackersById = dict[int, dict[str, Any]]
+
+# (payload-key, alarm-type) tuples — when the boolean flips False→True we
+# fire georide_alarm_event with the alarm-type string.
+_ALARM_FLAGS: tuple[tuple[str, str], ...] = (
+    ("isStolen", "stolen"),
+    ("isCrashed", "crashed"),
+    ("hasTheftCaseOpened", "theft_case_opened"),
+)
 
 
 class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
@@ -66,4 +86,54 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
                 )
                 continue
             indexed[int(tid)] = tracker
+
+        # `self.data` is the previous snapshot here (set by the base class
+        # AFTER this method returns), so we can diff against it for free.
+        if self.data is not None:
+            self._fire_state_change_events(self.data, indexed)
+
         return indexed
+
+    def _fire_state_change_events(
+        self, previous: TrackersById, current: TrackersById
+    ) -> None:
+        """Diff snapshots and fire events for tracked transitions."""
+        device_registry = dr.async_get(self.hass)
+        for tid, tracker in current.items():
+            prev = previous.get(tid)
+            if prev is None:
+                continue  # newly-added tracker; skip transitions
+
+            device = device_registry.async_get_device(
+                identifiers={(DOMAIN, str(tid))}
+            )
+            base = {
+                "device_id": device.id if device else None,
+                "tracker_id": tid,
+                "tracker_name": tracker.get("trackerName"),
+            }
+
+            if isinstance(prev.get("isLocked"), bool) and isinstance(
+                tracker.get("isLocked"), bool
+            ) and prev["isLocked"] != tracker["isLocked"]:
+                self.hass.bus.async_fire(
+                    EVENT_LOCK, {**base, "is_locked": tracker["isLocked"]}
+                )
+
+            if isinstance(prev.get("moving"), bool) and isinstance(
+                tracker.get("moving"), bool
+            ) and prev["moving"] != tracker["moving"]:
+                self.hass.bus.async_fire(
+                    EVENT_MOVING, {**base, "moving": tracker["moving"]}
+                )
+
+            for key, alarm_type in _ALARM_FLAGS:
+                if (
+                    isinstance(prev.get(key), bool)
+                    and isinstance(tracker.get(key), bool)
+                    and not prev[key]
+                    and tracker[key]
+                ):
+                    self.hass.bus.async_fire(
+                        EVENT_ALARM, {**base, "type": alarm_type}
+                    )
