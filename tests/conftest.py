@@ -1,19 +1,12 @@
-"""Pytest fixtures + import shim.
+"""Pytest fixtures + conditional import shim.
 
-The `custom_components/georide` package imports from `homeassistant.*` at
-module load time. We don't want to install Home Assistant just to test a
-pure-aiohttp REST client, so this conftest:
-
-  1. Stubs the few `homeassistant.*` symbols the integration's `const.py`
-     transitively needs.
-  2. Loads `const.py` and `api.py` directly via `importlib`, bypassing the
-     package `__init__.py` (which has heavier HA imports we don't need here).
-  3. Registers them in `sys.modules` under the `georide.*` namespace so test
-     files can write `from georide.api import GeoRideApiClient` naturally.
-
-If/when proper Home Assistant test infrastructure is added
-(pytest-homeassistant-custom-component on a Python >= 3.12 venv), this shim
-can be deleted.
+The integration imports from `homeassistant.*` at package load time. When
+Home Assistant is installed in the active venv (e.g. via
+`pytest-homeassistant-custom-component` on Python 3.12+), tests load the
+real integration directly. When HA is not available (e.g. the lightweight
+Python 3.9 venv used for live API tests), this conftest installs a minimal
+shim so the API client and `const.py` can still be loaded for testing the
+network layer in isolation.
 """
 from __future__ import annotations
 
@@ -28,58 +21,63 @@ import pytest
 import pytest_asyncio
 
 # ---------------------------------------------------------------------------
-# 1. Stub homeassistant.const for const.py
+# 1. Detect whether Home Assistant is installed in this venv
 # ---------------------------------------------------------------------------
-if "homeassistant" not in sys.modules:
-    sys.modules["homeassistant"] = types.ModuleType("homeassistant")
+try:
+    import homeassistant  # noqa: F401
 
-if "homeassistant.const" not in sys.modules:
-    _ha_const = types.ModuleType("homeassistant.const")
-
-    class _Platform:  # only the names const.py / __init__.py reference
-        BINARY_SENSOR = "binary_sensor"
-        DEVICE_TRACKER = "device_tracker"
-        LOCK = "lock"
-        SENSOR = "sensor"
-        SIREN = "siren"
-
-    _ha_const.Platform = _Platform
-    sys.modules["homeassistant.const"] = _ha_const
+    _HA_NATIVE = True
+except ImportError:
+    _HA_NATIVE = False
 
 # ---------------------------------------------------------------------------
-# 2. Load api.py + const.py via importlib, register under georide.*
+# 2. Without HA, install a minimal shim so `from georide.api import X` works
 # ---------------------------------------------------------------------------
-_GR_DIR = Path(__file__).parent.parent / "custom_components" / "georide"
+if not _HA_NATIVE:
+    if "homeassistant" not in sys.modules:
+        sys.modules["homeassistant"] = types.ModuleType("homeassistant")
 
-_pkg = types.ModuleType("georide")
-_pkg.__path__ = [str(_GR_DIR)]
-sys.modules["georide"] = _pkg
+    if "homeassistant.const" not in sys.modules:
+        _ha_const = types.ModuleType("homeassistant.const")
 
+        class _Platform:
+            BINARY_SENSOR = "binary_sensor"
+            DEVICE_TRACKER = "device_tracker"
+            LOCK = "lock"
+            SENSOR = "sensor"
+            SIREN = "siren"
 
-def _load(submod: str) -> types.ModuleType:
-    name = f"georide.{submod}"
-    spec = importlib.util.spec_from_file_location(name, _GR_DIR / f"{submod}.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    setattr(_pkg, submod, module)
-    return module
+        _ha_const.Platform = _Platform
+        sys.modules["homeassistant.const"] = _ha_const
 
+    _GR_DIR = Path(__file__).parent.parent / "custom_components" / "georide"
+    _pkg = types.ModuleType("georide")
+    _pkg.__path__ = [str(_GR_DIR)]
+    sys.modules["georide"] = _pkg
 
-_load("const")
-_load("api")
+    def _load(submod: str) -> types.ModuleType:
+        name = f"georide.{submod}"
+        spec = importlib.util.spec_from_file_location(name, _GR_DIR / f"{submod}.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        setattr(_pkg, submod, module)
+        return module
 
-# Late import: now resolves to the importlib-loaded module above.
+    _load("const")
+    _load("api")
+
+# When HA is native, the path is set by pyproject's `pythonpath` and
+# `from georide.api import X` works through the normal import system.
 from georide.api import GeoRideApiClient  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# 3. Credentials loader
+# 3. Credentials loader (for live tests)
 # ---------------------------------------------------------------------------
 _SECRETS_FILE = Path(__file__).parent / "secrets.local.env"
 
 
 def _load_secrets_file_into_env() -> None:
-    """Copy KEY=VALUE lines from secrets.local.env into os.environ (missing-only)."""
     if not _SECRETS_FILE.exists():
         return
     for raw in _SECRETS_FILE.read_text().splitlines():
@@ -94,11 +92,10 @@ _load_secrets_file_into_env()
 
 
 # ---------------------------------------------------------------------------
-# 4. Fixtures
+# 4. Fixtures for live API tests
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
 def georide_credentials() -> tuple[str, str]:
-    """Return (email, password) or skip if missing."""
     email = os.environ.get("GEORIDE_EMAIL")
     password = os.environ.get("GEORIDE_PASSWORD")
     if not email or not password:
@@ -121,3 +118,32 @@ async def authed_client(aiohttp_session, georide_credentials):
     client = GeoRideApiClient(aiohttp_session)
     await client.login(email, password)
     return client
+
+
+# ---------------------------------------------------------------------------
+# 5. HA-only fixtures — auto-enable the pytest-homeassistant-custom-component
+#    plugin when running on a venv that has it installed
+# ---------------------------------------------------------------------------
+if _HA_NATIVE:
+    pytest_plugins = ("pytest_homeassistant_custom_component",)
+
+    @pytest.fixture(autouse=True)
+    def auto_enable_custom_integrations(enable_custom_integrations):
+        """Required by pytest-homeassistant-custom-component to find our package."""
+        yield
+
+
+# ---------------------------------------------------------------------------
+# 6. Cross-venv routing: live tests need raw aiohttp (works in py3.9 .venv).
+#    HA's bundled aiodns/aiohttp pair fights live tests in .venv-ha, so we
+#    skip live runs there and rely on the lightweight venv for live coverage.
+# ---------------------------------------------------------------------------
+def pytest_collection_modifyitems(config, items):
+    if _HA_NATIVE:
+        skip_live = pytest.mark.skip(
+            reason="Live tests run in the .venv (py3.9) venv only; "
+            "HA's bundled aiohttp/aiodns versions break raw client calls."
+        )
+        for item in items:
+            if "live" in item.keywords:
+                item.add_marker(skip_live)

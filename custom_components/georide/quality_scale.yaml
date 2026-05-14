@@ -6,9 +6,7 @@ rules:
     status: todo
     comment: Pending PR to home-assistant/brands with the GeoRide logo.
   common-modules: done
-  config-flow-test-coverage:
-    status: todo
-    comment: Requires pytest-homeassistant-custom-component on a Python 3.12+ venv. Planned in the next slice.
+  config-flow-test-coverage: done
   config-flow: done
   dependency-transparency: done
   docs-actions: done
@@ -35,7 +33,7 @@ rules:
   reauthentication-flow: done
   test-coverage:
     status: todo
-    comment: Pure helpers + stats covered (69 tests). Coordinator, config flow and entities need HA test infra.
+    comment: Helpers (26), stats (22), config flow (9) covered. Coordinator and entity platforms still need snapshot tests for the ≥95% target.
 
   # 🥇 Gold
   devices: done
