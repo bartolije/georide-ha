@@ -2,25 +2,33 @@
 
 Unofficial Home Assistant integration for [GeoRide](https://georide.fr) motorcycle GPS trackers.
 
-> **Status:** work in progress. Skeleton only. Not functional yet.
+> **Status:** work in progress. Login + tracker list + trip summary service. No entities yet.
 
-## Installation
+## Quick install
 
-### HACS (custom repository)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=bartolije&repository=georide-ha&category=integration)
 
-1. In HACS, go to *Integrations* → ⋮ → *Custom repositories*.
-2. Add `https://github.com/bartolije/georide-ha` with category *Integration*.
-3. Install **GeoRide**.
-4. Restart Home Assistant.
-5. Add the integration: *Settings → Devices & Services → Add Integration → GeoRide*.
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=georide)
 
-### Manual
+1. Click the first badge → it adds this repo to HACS as a custom repository.
+2. In HACS, install **GeoRide**, then restart Home Assistant.
+3. Click the second badge → it opens the config flow to enter your GeoRide
+   credentials.
 
-Copy `custom_components/georide/` into your Home Assistant `config/custom_components/` directory and restart.
+Both badges use the [My Home Assistant](https://my.home-assistant.io) redirect
+service. Home Assistant 2021.3 or newer required.
+
+## Manual install (no HACS)
+
+Copy `custom_components/georide/` into your Home Assistant `config/custom_components/`
+directory and restart. Then add the integration through *Settings → Devices &
+Services → Add Integration → GeoRide*.
 
 ## Configuration
 
-The integration is configured through the UI. You will be asked for your GeoRide account email and password.
+The integration is configured entirely through the UI. You will be asked for
+your GeoRide account email and password. Only the resulting bearer token is
+persisted — the password is never stored.
 
 ## Services
 
