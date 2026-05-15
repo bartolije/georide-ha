@@ -1,0 +1,118 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GeoRide",
+        "description": "Sign in with your GeoRide account.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "GeoRide — re-authentication required",
+        "description": "Your GeoRide token expired. Re-enter the password for {email}.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "GeoRide — reconfigure",
+        "description": "Refresh the GeoRide token for {email} by re-entering the password.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid authentication",
+      "cannot_connect": "Failed to connect",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This account is already configured",
+      "reauth_successful": "Re-authentication successful",
+      "reconfigure_successful": "Reconfiguration successful"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "moving": { "name": "Moving" },
+      "stolen": { "name": "Stolen" },
+      "crashed": { "name": "Crashed" },
+      "has_beacon": { "name": "Has beacon" },
+      "beacon_firmware_update": { "name": "Firmware update available" }
+    },
+    "sensor": {
+      "odometer": { "name": "Odometer" },
+      "speed": { "name": "Speed" },
+      "battery_level": { "name": "Battery" },
+      "last_seen": { "name": "Last seen" },
+      "altitude": { "name": "Altitude" },
+      "external_battery_voltage": { "name": "External battery voltage" },
+      "internal_battery_voltage": { "name": "Internal battery voltage" },
+      "subscription_expires": { "name": "Subscription expires" },
+      "last_trip_end": { "name": "Last trip end" },
+      "last_trip_distance": { "name": "Last trip distance" },
+      "last_trip_duration": { "name": "Last trip duration" },
+      "last_trip_avg_speed": { "name": "Last trip average speed" },
+      "last_trip_max_speed": { "name": "Last trip top speed" },
+      "last_trip_max_lean_angle": { "name": "Last trip max lean angle" },
+      "beacon_battery": { "name": "Battery" },
+      "beacon_last_seen": { "name": "Last battery report" }
+    },
+    "switch": {
+      "eco_mode": { "name": "Eco mode" }
+    }
+  },
+  "exceptions": {
+    "token_rejected": {
+      "message": "GeoRide rejected the stored token: {error}"
+    },
+    "cannot_connect_api": {
+      "message": "Cannot reach the GeoRide API: {error}"
+    },
+    "api_error": {
+      "message": "GeoRide API error: {error}"
+    },
+    "not_configured": {
+      "message": "The GeoRide integration is not configured"
+    },
+    "invalid_date_range": {
+      "message": "start_date must be on or before end_date"
+    },
+    "tracker_not_found": {
+      "message": "No configured GeoRide tracker matches tracker_id={tracker_id}"
+    }
+  },
+  "issues": {
+    "subscription_expiring": {
+      "title": "GeoRide subscription expires soon",
+      "description": "The GeoRide subscription for **{tracker_name}** expires on **{expires}**. Renew it on georide.fr before then to avoid losing tracking, alerts and lock control."
+    }
+  },
+  "services": {
+    "trip_summary": {
+      "name": "Trip summary",
+      "description": "Fetch trips for a date range and return aggregate stats.",
+      "fields": {
+        "start_date": {
+          "name": "Start date",
+          "description": "First day, inclusive (UTC)."
+        },
+        "end_date": {
+          "name": "End date",
+          "description": "Last day, inclusive (UTC)."
+        },
+        "tracker_id": {
+          "name": "Tracker ID",
+          "description": "Restrict to a single tracker. Omit to aggregate every tracker."
+        },
+        "include_trips": {
+          "name": "Include raw trips",
+          "description": "Include the raw trip list in the response."
+        }
+      }
+    }
+  }
+}

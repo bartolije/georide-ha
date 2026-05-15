@@ -1,0 +1,118 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GeoRide",
+        "description": "Connectez-vous à votre compte GeoRide.",
+        "data": {
+          "email": "Adresse e-mail",
+          "password": "Mot de passe"
+        }
+      },
+      "reauth_confirm": {
+        "title": "GeoRide — ré-authentification requise",
+        "description": "Le jeton GeoRide a expiré. Saisissez à nouveau le mot de passe de {email}.",
+        "data": {
+          "password": "Mot de passe"
+        }
+      },
+      "reconfigure": {
+        "title": "GeoRide — reconfiguration",
+        "description": "Rafraîchissez le jeton GeoRide pour {email} en saisissant à nouveau votre mot de passe.",
+        "data": {
+          "password": "Mot de passe"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Identifiants incorrects",
+      "cannot_connect": "Connexion impossible",
+      "unknown": "Erreur inattendue"
+    },
+    "abort": {
+      "already_configured": "Ce compte est déjà configuré",
+      "reauth_successful": "Ré-authentification réussie",
+      "reconfigure_successful": "Reconfiguration réussie"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "moving": { "name": "En mouvement" },
+      "stolen": { "name": "Volée" },
+      "crashed": { "name": "Chute détectée" },
+      "has_beacon": { "name": "Badge associé" },
+      "beacon_firmware_update": { "name": "Mise à jour du firmware disponible" }
+    },
+    "sensor": {
+      "odometer": { "name": "Compteur kilométrique" },
+      "speed": { "name": "Vitesse" },
+      "battery_level": { "name": "Batterie" },
+      "last_seen": { "name": "Dernière position" },
+      "altitude": { "name": "Altitude" },
+      "external_battery_voltage": { "name": "Tension batterie externe" },
+      "internal_battery_voltage": { "name": "Tension batterie interne" },
+      "subscription_expires": { "name": "Fin d'abonnement" },
+      "last_trip_end": { "name": "Fin du dernier trajet" },
+      "last_trip_distance": { "name": "Distance du dernier trajet" },
+      "last_trip_duration": { "name": "Durée du dernier trajet" },
+      "last_trip_avg_speed": { "name": "Vitesse moyenne du dernier trajet" },
+      "last_trip_max_speed": { "name": "Vitesse max du dernier trajet" },
+      "last_trip_max_lean_angle": { "name": "Angle d'inclinaison max du dernier trajet" },
+      "beacon_battery": { "name": "Batterie" },
+      "beacon_last_seen": { "name": "Dernière remontée batterie" }
+    },
+    "switch": {
+      "eco_mode": { "name": "Mode éco" }
+    }
+  },
+  "exceptions": {
+    "token_rejected": {
+      "message": "GeoRide a refusé le jeton enregistré : {error}"
+    },
+    "cannot_connect_api": {
+      "message": "Impossible de joindre l'API GeoRide : {error}"
+    },
+    "api_error": {
+      "message": "Erreur de l'API GeoRide : {error}"
+    },
+    "not_configured": {
+      "message": "L'intégration GeoRide n'est pas configurée"
+    },
+    "invalid_date_range": {
+      "message": "La date de début doit être antérieure ou égale à la date de fin"
+    },
+    "tracker_not_found": {
+      "message": "Aucun traceur GeoRide configuré ne correspond à tracker_id={tracker_id}"
+    }
+  },
+  "issues": {
+    "subscription_expiring": {
+      "title": "L'abonnement GeoRide arrive à échéance",
+      "description": "L'abonnement GeoRide de **{tracker_name}** expire le **{expires}**. Renouvelez-le sur georide.fr avant cette date pour conserver le suivi, les alertes et le verrouillage à distance."
+    }
+  },
+  "services": {
+    "trip_summary": {
+      "name": "Synthèse des trajets",
+      "description": "Récupère les trajets sur une plage de dates et renvoie un résumé statistique.",
+      "fields": {
+        "start_date": {
+          "name": "Date de début",
+          "description": "Premier jour, inclus (UTC)."
+        },
+        "end_date": {
+          "name": "Date de fin",
+          "description": "Dernier jour, inclus (UTC)."
+        },
+        "tracker_id": {
+          "name": "Identifiant de la moto",
+          "description": "Limite à un seul traceur. Laisser vide pour agréger toutes les motos."
+        },
+        "include_trips": {
+          "name": "Inclure les trajets bruts",
+          "description": "Ajoute la liste complète des trajets dans la réponse."
+        }
+      }
+    }
+  }
+}
