@@ -229,6 +229,18 @@ async def async_setup_entry(
                     continue
                 known.add(key)
                 new.append(GeoRideLastTripSensor(coordinator, tracker_id, desc))
+        for tracker_id, items in coordinator.maintenance.items():
+            for item in items:
+                item_id = item.get("id")
+                if not isinstance(item_id, int):
+                    continue
+                key = ("maintenance", tracker_id, item_id)
+                if key in known:
+                    continue
+                known.add(key)
+                new.append(
+                    GeoRideMaintenanceSensor(coordinator, tracker_id, item_id)
+                )
         for tracker_id, beacons in coordinator.beacons.items():
             for beacon in beacons:
                 beacon_id = beacon.get("id")
@@ -286,6 +298,77 @@ class GeoRideLastTripSensor(GeoRideEntity, SensorEntity):
     def native_value(self) -> StateType | datetime:
         trip = self.coordinator.last_trips.get(self._tracker_id) or {}
         return self.entity_description.value_fn(trip)
+
+
+class GeoRideMaintenanceSensor(GeoRideEntity, SensorEntity):
+    """One sensor per user-defined maintenance item.
+
+    The name comes from the GeoRide app (e.g. 'Niveau d'huile') so there's
+    no translation_key. The unit and device_class adapt to the item's
+    `dateUnitType`: 'days' → DURATION, anything else → DISTANCE (meters
+    converted to km).
+    """
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: GeoRideCoordinator,
+        tracker_id: int,
+        item_id: int,
+    ) -> None:
+        super().__init__(coordinator, tracker_id)
+        self._item_id = item_id
+        self._attr_unique_id = f"{tracker_id}-maintenance-{item_id}"
+
+    @property
+    def _item(self) -> dict[str, Any]:
+        for item in self.coordinator.maintenance.get(self._tracker_id, []):
+            if item.get("id") == self._item_id:
+                return item
+        return {}
+
+    @property
+    def name(self) -> str | None:
+        n = self._item.get("name")
+        if isinstance(n, str) and n:
+            return n
+        return f"Maintenance {self._item_id}"
+
+    @property
+    def native_value(self) -> StateType:
+        todo = self._item.get("todo")
+        if not isinstance(todo, (int, float)) or isinstance(todo, bool):
+            return None
+        dut = self._item.get("dateUnitType")
+        if dut is None:
+            # Distance-based: GeoRide stores meters, render as km.
+            return round(float(todo) / 1000.0, 2)
+        if dut == "days":
+            return int(todo)
+        if dut == "years":
+            # GeoRide stores years-mode counters in hours (8759 h ≈ 1 y).
+            # Convert to days for a more readable display.
+            return round(float(todo) / 24.0, 1)
+        # Unknown time-unit, surface raw value rather than mis-converting.
+        return todo
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        if self._item.get("dateUnitType") is None:
+            return UnitOfLength.KILOMETERS
+        return UnitOfTime.DAYS
+
+    @property
+    def device_class(self) -> SensorDeviceClass | None:
+        if self._item.get("dateUnitType") is None:
+            return SensorDeviceClass.DISTANCE
+        return SensorDeviceClass.DURATION
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._item)
 
 
 class GeoRideBeaconSensor(GeoRideBeaconEntity, SensorEntity):

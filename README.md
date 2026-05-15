@@ -72,6 +72,7 @@ the following entities:
 | `sensor` | Last trip distance / duration / average speed / top speed | Stats of that ride. |
 | `sensor` | Last trip max lean angle | Disabled by default. |
 | `switch` | Eco mode | Toggle the tracker's eco mode (slower fixes, longer battery life). State follows `isInEco`. |
+| `sensor` | (per maintenance item) | One diagnostic sensor per item you've configured in the GeoRide app (oil change, chain grease, tyre pressure, …). Unit auto-detects: kilometres for distance-based items, days for time-based items. Refreshed every 15 min. |
 | `lock` | (tracker name) | Lock / unlock the GeoRide remotely. State follows `isLocked`. |
 | `siren` | Siren | Trigger or stop the sonor alarm. Write-only — state is not reported back by GeoRide. |
 | `binary_sensor` | Moving | `DeviceClass.MOVING`. |

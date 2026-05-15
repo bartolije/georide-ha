@@ -144,6 +144,51 @@ class GeoRideApiClient:
             )
         return data
 
+    async def get_maintenance(
+        self, tracker_id: int | str
+    ) -> list[dict[str, Any]]:
+        """Return the tracker's maintenance items (oil, chain, tyres, …).
+
+        The endpoint returns `{"maintenanceList": [...]}` so we unwrap it
+        here. Each item is configured by the user in the GeoRide app and
+        carries a localised `name` (e.g. 'Niveau d'huile'), a remaining
+        counter in `todo`, and a `dateUnitType` of either `'days'` for a
+        time-based counter or `null` for a distance-based counter in
+        meters.
+        """
+        if not self._token:
+            raise GeoRideAuthError("Not authenticated; call login() first")
+
+        url = f"{API_HOST}/tracker/{tracker_id}/maintenance"
+        headers = {"Authorization": f"Bearer {self._token}"}
+        try:
+            async with self._session.get(
+                url, headers=headers, timeout=_TIMEOUT
+            ) as resp:
+                if resp.status in (401, 403):
+                    raise GeoRideAuthError(
+                        f"Token rejected by GeoRide (HTTP {resp.status})"
+                    )
+                resp.raise_for_status()
+                data = await resp.json()
+        except ClientResponseError as err:
+            if err.status in (401, 403):
+                raise GeoRideAuthError(str(err)) from err
+            raise GeoRideConnectionError(str(err)) from err
+        except ClientError as err:
+            raise GeoRideConnectionError(str(err)) from err
+
+        if not isinstance(data, dict):
+            raise GeoRideError(
+                f"Unexpected maintenance response shape: {type(data).__name__}"
+            )
+        items = data.get("maintenanceList", [])
+        if not isinstance(items, list):
+            raise GeoRideError(
+                f"Unexpected maintenanceList shape: {type(items).__name__}"
+            )
+        return items
+
     async def get_tracker_beacons(
         self, tracker_id: int | str
     ) -> list[dict[str, Any]]:

@@ -49,6 +49,10 @@ SUBSCRIPTION_WARNING_WINDOW = timedelta(days=7)
 LAST_TRIPS_REFRESH = timedelta(minutes=5)
 LAST_TRIPS_LOOKBACK = timedelta(days=2)
 
+# Maintenance items change rarely (user edits them in the GeoRide app).
+# 15 minutes is a polite interval that still picks up changes promptly.
+MAINTENANCE_REFRESH = timedelta(minutes=15)
+
 TrackersById = dict[int, dict[str, Any]]
 
 # (payload-key, alarm-type) tuples — when the boolean flips False→True we
@@ -88,7 +92,9 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         self.client = client
         self.beacons: dict[int, list[dict[str, Any]]] = {}
         self.last_trips: dict[int, dict[str, Any] | None] = {}
+        self.maintenance: dict[int, list[dict[str, Any]]] = {}
         self._last_trips_fetched_at: datetime | None = None
+        self._maintenance_fetched_at: datetime | None = None
         self._socket: GeoRideSocketClient | None = None
 
     async def _async_update_data(self) -> TrackersById:
@@ -112,6 +118,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
 
         await self._refresh_beacons(indexed)
         await self._maybe_refresh_last_trips(indexed)
+        await self._maybe_refresh_maintenance(indexed)
         self._check_subscription_expiry(indexed)
 
         # `self.data` is the previous snapshot here (set by the base class
@@ -153,6 +160,33 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             else:
                 self.last_trips[tid] = None
         self._last_trips_fetched_at = now
+
+    async def _maybe_refresh_maintenance(self, trackers: TrackersById) -> None:
+        """Fetch maintenance items at most every MAINTENANCE_REFRESH window.
+
+        Stores `self.maintenance[tracker_id]` as the raw list returned by
+        /tracker/{id}/maintenance. Per-tracker failures keep the previous
+        snapshot so entities don't flash unknown on a transient error.
+        """
+        now = datetime.now(tz=timezone.utc)
+        if (
+            self._maintenance_fetched_at is not None
+            and now - self._maintenance_fetched_at < MAINTENANCE_REFRESH
+        ):
+            return
+
+        for tid in trackers:
+            try:
+                items = await self.client.get_maintenance(tid)
+            except (GeoRideAuthError, GeoRideConnectionError, GeoRideError) as err:
+                _LOGGER.debug(
+                    "Maintenance fetch failed for tracker %s: %s — keeping previous",
+                    tid,
+                    err,
+                )
+                continue
+            self.maintenance[tid] = items
+        self._maintenance_fetched_at = now
 
     def _check_subscription_expiry(self, trackers: TrackersById) -> None:
         """Raise / clear a repair issue when a subscription is about to expire.
