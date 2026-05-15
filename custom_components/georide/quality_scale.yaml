@@ -2,9 +2,7 @@ rules:
   # 🥉 Bronze
   action-setup: done
   appropriate-polling: done
-  brands:
-    status: todo
-    comment: Pending PR to home-assistant/brands with the GeoRide logo.
+  brands: done
   common-modules: done
   config-flow-test-coverage: done
   config-flow: done
