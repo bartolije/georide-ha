@@ -80,8 +80,8 @@ class GeoRideApiClient:
                 f"Login succeeded but no token field in response (keys: {sorted(data)})"
             )
 
-        self._token = token
-        return token
+        self._token = str(token)
+        return self._token
 
     async def get_trackers(self) -> list[dict[str, Any]]:
         """Return the raw list of trackers for the authenticated user."""

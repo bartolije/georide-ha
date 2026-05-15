@@ -8,3 +8,9 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+[tool.mypy]
+strict = true
+files = ["custom_components/georide"]
+exclude = ["tests/", "lovelace/"]
+python_version = "3.12"

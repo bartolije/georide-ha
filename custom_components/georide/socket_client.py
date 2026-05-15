@@ -20,7 +20,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-import socketio
+import socketio  # type: ignore[import-untyped]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class GeoRideSocketClient:
         for name in KNOWN_EVENTS:
             self._sio.on(name, self._make_named_handler(name))
 
-        @self._sio.on("*")
+        @self._sio.on("*")  # type: ignore[untyped-decorator]
         async def _catch_all(event: str, *args: Any) -> None:
             if event in ("connect", "disconnect") or event in KNOWN_EVENTS:
                 return
@@ -73,7 +73,9 @@ class GeoRideSocketClient:
             _LOGGER.debug("GeoRide socket [unknown:%s]: %r", event, payload)
             await self._safe_dispatch(event, payload)
 
-    def _make_named_handler(self, name: str):
+    def _make_named_handler(
+        self, name: str
+    ) -> Callable[[Any], Awaitable[None]]:
         async def _handler(payload: Any = None) -> None:
             _LOGGER.debug("GeoRide socket [%s]: %r", name, payload)
             await self._safe_dispatch(name, payload)
@@ -115,4 +117,4 @@ class GeoRideSocketClient:
 
     @property
     def connected(self) -> bool:
-        return self._sio.connected
+        return bool(self._sio.connected)

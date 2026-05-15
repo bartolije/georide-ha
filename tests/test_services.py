@@ -1,25 +1,26 @@
 """Tests for the georide.trip_summary service."""
 from __future__ import annotations
 
-from datetime import date
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
-import voluptuous as vol
 
+# Must come before any HA / phacc imports so the file is skipped cleanly on
+# the lightweight py3.9 venv that has neither installed.
 pytest.importorskip("pytest_homeassistant_custom_component")
 
-from homeassistant.const import CONF_EMAIL, CONF_TOKEN
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from datetime import date  # noqa: E402
+from unittest.mock import AsyncMock, MagicMock  # noqa: E402
 
-from custom_components.georide import services
-from custom_components.georide.api import (
+from homeassistant.const import CONF_EMAIL, CONF_TOKEN  # noqa: E402
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError  # noqa: E402
+from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
+
+from custom_components.georide import services  # noqa: E402
+from custom_components.georide.api import (  # noqa: E402
     GeoRideAuthError,
     GeoRideConnectionError,
     GeoRideError,
 )
-from custom_components.georide.const import DOMAIN
+from custom_components.georide.const import DOMAIN  # noqa: E402
 
 
 def _trip(**overrides):

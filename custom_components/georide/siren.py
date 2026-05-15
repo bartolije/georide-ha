@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.siren import SirenEntity, SirenEntityFeature
+from homeassistant.components.siren import (  # type: ignore[attr-defined]
+    SirenEntity,
+    SirenEntityFeature,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -69,7 +72,7 @@ class GeoRideSiren(GeoRideEntity, SirenEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._call(self.coordinator.client.siren_off)
 
-    async def _call(self, fn) -> None:
+    async def _call(self, fn: Any) -> None:
         try:
             await fn(self._tracker_id)
         except GeoRideAuthError as err:

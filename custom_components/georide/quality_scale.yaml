@@ -71,6 +71,4 @@ rules:
   inject-websession:
     status: exempt
     comment: Same as async-dependency.
-  strict-typing:
-    status: todo
-    comment: TypedDict for tracker/trip payloads + py.typed marker + mypy strict in CI pending.
+  strict-typing: done

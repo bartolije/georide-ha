@@ -63,7 +63,7 @@ class GeoRideLock(GeoRideEntity, LockEntity):
     async def async_unlock(self, **kwargs: Any) -> None:
         await self._call(self.coordinator.client.unlock_tracker)
 
-    async def _call(self, fn) -> None:
+    async def _call(self, fn: Any) -> None:
         try:
             await fn(self._tracker_id)
         except GeoRideAuthError as err:

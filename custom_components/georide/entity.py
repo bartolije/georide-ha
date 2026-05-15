@@ -61,14 +61,16 @@ class GeoRideBeaconEntity(CoordinatorEntity[GeoRideCoordinator]):
         if isinstance(mac, str) and mac:
             connections.add((CONNECTION_NETWORK_MAC, mac.lower()))
 
-        self._attr_device_info = DeviceInfo(
+        device_info = DeviceInfo(
             identifiers={(DOMAIN, f"beacon-{beacon_id}")},
             via_device=(DOMAIN, str(tracker_id)),
             name=beacon.get("name") or f"GeoRide beacon {beacon_id}",
             manufacturer=MANUFACTURER,
             model=beacon.get("model"),
-            connections=connections if connections else None,
         )
+        if connections:
+            device_info["connections"] = connections
+        self._attr_device_info = device_info
 
     @property
     def _beacon(self) -> dict[str, Any]:

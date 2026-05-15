@@ -66,7 +66,7 @@ class GeoRideEcoModeSwitch(GeoRideEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._call(self.coordinator.client.eco_mode_off)
 
-    async def _call(self, fn) -> None:
+    async def _call(self, fn: Any) -> None:
         try:
             await fn(self._tracker_id)
         except GeoRideAuthError as err:

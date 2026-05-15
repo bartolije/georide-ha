@@ -1,7 +1,10 @@
 """GeoRide device_tracker platform."""
 from __future__ import annotations
 
-from homeassistant.components.device_tracker import SourceType, TrackerEntity
+from homeassistant.components.device_tracker import (  # type: ignore[attr-defined]
+    SourceType,
+    TrackerEntity,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback

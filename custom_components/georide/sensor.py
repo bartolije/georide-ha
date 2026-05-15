@@ -234,7 +234,7 @@ async def async_setup_entry(
                 item_id = item.get("id")
                 if not isinstance(item_id, int):
                     continue
-                key = ("maintenance", tracker_id, item_id)
+                key = ("maintenance", tracker_id, str(item_id))
                 if key in known:
                     continue
                 known.add(key)

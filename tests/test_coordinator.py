@@ -1,30 +1,30 @@
 """Tests for the GeoRide coordinator (update cycle, events, socket dispatch)."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component")
 
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.update_coordinator import UpdateFailed
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from datetime import datetime, timedelta, timezone  # noqa: E402
+from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
 
-from custom_components.georide.api import (
+from homeassistant.exceptions import ConfigEntryAuthFailed  # noqa: E402
+from homeassistant.helpers import issue_registry as ir  # noqa: E402
+from homeassistant.helpers.update_coordinator import UpdateFailed  # noqa: E402
+from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
+
+from custom_components.georide.api import (  # noqa: E402
     GeoRideAuthError,
     GeoRideConnectionError,
     GeoRideError,
 )
-from custom_components.georide.const import (
+from custom_components.georide.const import (  # noqa: E402
     DOMAIN,
     EVENT_ALARM,
     EVENT_LOCK,
     EVENT_MOVING,
 )
-from custom_components.georide.coordinator import GeoRideCoordinator
+from custom_components.georide.coordinator import GeoRideCoordinator  # noqa: E402
 
 
 def _make_entry(hass):

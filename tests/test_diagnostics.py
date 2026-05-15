@@ -1,19 +1,19 @@
 """Tests for diagnostics download — checks redaction and lookups."""
 from __future__ import annotations
 
-from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component")
 
-from homeassistant.const import CONF_EMAIL, CONF_TOKEN
-from homeassistant.helpers import device_registry as dr
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from datetime import timedelta  # noqa: E402
+from unittest.mock import AsyncMock, MagicMock  # noqa: E402
 
-from custom_components.georide import diagnostics
-from custom_components.georide.const import DOMAIN
+from homeassistant.const import CONF_EMAIL, CONF_TOKEN  # noqa: E402
+from homeassistant.helpers import device_registry as dr  # noqa: E402
+from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
+
+from custom_components.georide import diagnostics  # noqa: E402
+from custom_components.georide.const import DOMAIN  # noqa: E402
 
 
 def _mock_coordinator(trackers):
