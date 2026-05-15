@@ -41,6 +41,13 @@ _LOGGER = logging.getLogger(__name__)
 UPDATE_INTERVAL = timedelta(seconds=60)
 SUBSCRIPTION_WARNING_WINDOW = timedelta(days=7)
 
+# How often we re-fetch the per-tracker trip list to refresh the
+# `last_trip_*` sensors. Polling /user/trackers is cheap, but trip lists
+# can hold dozens of items per tracker; capping at 5 minutes is a polite
+# trade-off — fresh enough for "last trip" semantics, light on the API.
+LAST_TRIPS_REFRESH = timedelta(minutes=5)
+LAST_TRIPS_LOOKBACK = timedelta(days=2)
+
 TrackersById = dict[int, dict[str, Any]]
 
 # (payload-key, alarm-type) tuples — when the boolean flips False→True we
@@ -79,6 +86,8 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         )
         self.client = client
         self.beacons: dict[int, list[dict[str, Any]]] = {}
+        self.last_trips: dict[int, dict[str, Any] | None] = {}
+        self._last_trips_fetched_at: datetime | None = None
 
     async def _async_update_data(self) -> TrackersById:
         try:
@@ -100,6 +109,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             indexed[int(tid)] = tracker
 
         await self._refresh_beacons(indexed)
+        await self._maybe_refresh_last_trips(indexed)
         self._check_subscription_expiry(indexed)
 
         # `self.data` is the previous snapshot here (set by the base class
@@ -108,6 +118,39 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             self._fire_state_change_events(self.data, indexed)
 
         return indexed
+
+    async def _maybe_refresh_last_trips(self, trackers: TrackersById) -> None:
+        """Refresh last_trips at most every LAST_TRIPS_REFRESH window.
+
+        Stores `self.last_trips[tracker_id]` = most recent trip dict (by
+        `endTime`) or None when the lookback window has no trips. A failed
+        fetch keeps the previous snapshot so the sensors don't flash unknown.
+        """
+        now = datetime.now(tz=timezone.utc)
+        if (
+            self._last_trips_fetched_at is not None
+            and now - self._last_trips_fetched_at < LAST_TRIPS_REFRESH
+        ):
+            return
+
+        from_iso = (now - LAST_TRIPS_LOOKBACK).strftime("%Y-%m-%dT%H:%M:%SZ")
+        to_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        for tid in trackers:
+            try:
+                trips = await self.client.get_trips(tid, from_iso, to_iso)
+            except (GeoRideAuthError, GeoRideConnectionError, GeoRideError) as err:
+                _LOGGER.debug(
+                    "Last-trip fetch failed for tracker %s: %s — keeping previous",
+                    tid,
+                    err,
+                )
+                continue
+            if trips:
+                trips.sort(key=lambda t: t.get("endTime") or "", reverse=True)
+                self.last_trips[tid] = trips[0]
+            else:
+                self.last_trips[tid] = None
+        self._last_trips_fetched_at = now
 
     def _check_subscription_expiry(self, trackers: TrackersById) -> None:
         """Raise / clear a repair issue when a subscription is about to expire.

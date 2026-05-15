@@ -12,6 +12,7 @@ PLATFORMS: list[Platform] = [
     Platform.LOCK,
     Platform.SENSOR,
     Platform.SIREN,
+    Platform.SWITCH,
 ]
 
 API_HOST = "https://api.georide.com"

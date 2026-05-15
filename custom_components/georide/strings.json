@@ -52,8 +52,17 @@
       "external_battery_voltage": { "name": "External battery voltage" },
       "internal_battery_voltage": { "name": "Internal battery voltage" },
       "subscription_expires": { "name": "Subscription expires" },
+      "last_trip_end": { "name": "Last trip end" },
+      "last_trip_distance": { "name": "Last trip distance" },
+      "last_trip_duration": { "name": "Last trip duration" },
+      "last_trip_avg_speed": { "name": "Last trip average speed" },
+      "last_trip_max_speed": { "name": "Last trip top speed" },
+      "last_trip_max_lean_angle": { "name": "Last trip max lean angle" },
       "beacon_battery": { "name": "Battery" },
       "beacon_last_seen": { "name": "Last battery report" }
+    },
+    "switch": {
+      "eco_mode": { "name": "Eco mode" }
     }
   },
   "exceptions": {

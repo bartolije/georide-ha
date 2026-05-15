@@ -68,6 +68,10 @@ the following entities:
 | `sensor` | External battery voltage | Diagnostic, raw V. |
 | `sensor` | Internal battery voltage | Diagnostic, disabled by default. |
 | `sensor` | Subscription expires | Diagnostic, disabled by default. |
+| `sensor` | Last trip end | Timestamp of the most recently ended ride (refreshed every 5 min). |
+| `sensor` | Last trip distance / duration / average speed / top speed | Stats of that ride. |
+| `sensor` | Last trip max lean angle | Disabled by default. |
+| `switch` | Eco mode | Toggle the tracker's eco mode (slower fixes, longer battery life). State follows `isInEco`. |
 | `lock` | (tracker name) | Lock / unlock the GeoRide remotely. State follows `isLocked`. |
 | `siren` | Siren | Trigger or stop the sonor alarm. Write-only — state is not reported back by GeoRide. |
 | `binary_sensor` | Moving | `DeviceClass.MOVING`. |

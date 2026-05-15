@@ -25,11 +25,13 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    DEGREE,
     PERCENTAGE,
     EntityCategory,
     UnitOfElectricPotential,
     UnitOfLength,
     UnitOfSpeed,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -124,6 +126,61 @@ SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
 )
 
 
+def _ms_to_s(value: Any) -> int | None:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return round(float(value) / 1000.0)
+
+
+LAST_TRIP_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
+    GeoRideSensorEntityDescription(
+        key="last_trip_end",
+        translation_key="last_trip_end",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda d: _parse_timestamp(d.get("endTime")),
+    ),
+    GeoRideSensorEntityDescription(
+        key="last_trip_distance",
+        translation_key="last_trip_distance",
+        device_class=SensorDeviceClass.DISTANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfLength.KILOMETERS,
+        value_fn=lambda d: _meters_to_km(d.get("distance")),
+    ),
+    GeoRideSensorEntityDescription(
+        key="last_trip_duration",
+        translation_key="last_trip_duration",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        value_fn=lambda d: _ms_to_s(d.get("duration")),
+    ),
+    GeoRideSensorEntityDescription(
+        key="last_trip_avg_speed",
+        translation_key="last_trip_avg_speed",
+        device_class=SensorDeviceClass.SPEED,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        value_fn=lambda d: _number(d.get("averageSpeed")),
+    ),
+    GeoRideSensorEntityDescription(
+        key="last_trip_max_speed",
+        translation_key="last_trip_max_speed",
+        device_class=SensorDeviceClass.SPEED,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        value_fn=lambda d: _number(d.get("maxSpeed")),
+    ),
+    GeoRideSensorEntityDescription(
+        key="last_trip_max_lean_angle",
+        translation_key="last_trip_max_lean_angle",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=DEGREE,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _number(d.get("maxAngle")),
+    ),
+)
+
+
 BEACON_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
     GeoRideSensorEntityDescription(
         key="battery",
@@ -166,6 +223,12 @@ async def async_setup_entry(
                     continue
                 known.add(key)
                 new.append(GeoRideSensor(coordinator, tracker_id, desc))
+            for desc in LAST_TRIP_SENSORS:
+                key = ("last_trip", tracker_id, desc.key)
+                if key in known:
+                    continue
+                known.add(key)
+                new.append(GeoRideLastTripSensor(coordinator, tracker_id, desc))
         for tracker_id, beacons in coordinator.beacons.items():
             for beacon in beacons:
                 beacon_id = beacon.get("id")
@@ -202,6 +265,27 @@ class GeoRideSensor(GeoRideEntity, SensorEntity):
     @property
     def native_value(self) -> StateType | datetime:
         return self.entity_description.value_fn(self._tracker)
+
+
+class GeoRideLastTripSensor(GeoRideEntity, SensorEntity):
+    """Reads from coordinator.last_trips[tracker_id] rather than the tracker dict."""
+
+    entity_description: GeoRideSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: GeoRideCoordinator,
+        tracker_id: int,
+        description: GeoRideSensorEntityDescription,
+    ) -> None:
+        super().__init__(coordinator, tracker_id)
+        self.entity_description = description
+        self._attr_unique_id = f"{tracker_id}-{description.key}"
+
+    @property
+    def native_value(self) -> StateType | datetime:
+        trip = self.coordinator.last_trips.get(self._tracker_id) or {}
+        return self.entity_description.value_fn(trip)
 
 
 class GeoRideBeaconSensor(GeoRideBeaconEntity, SensorEntity):

@@ -175,6 +175,18 @@ class GeoRideApiClient:
         """Turn the sonor alarm OFF via POST /tracker/{id}/sonor-alarm/off."""
         await self._post(f"/tracker/{tracker_id}/sonor-alarm/off")
 
+    async def eco_mode_on(self, tracker_id: int | str) -> None:
+        """Enable eco mode via POST /tracker/{id}/eco-mode/on.
+
+        Eco mode reduces the tracker's polling rate to preserve the
+        bike battery when the moto is parked for long periods.
+        """
+        await self._post(f"/tracker/{tracker_id}/eco-mode/on")
+
+    async def eco_mode_off(self, tracker_id: int | str) -> None:
+        """Disable eco mode via POST /tracker/{id}/eco-mode/off."""
+        await self._post(f"/tracker/{tracker_id}/eco-mode/off")
+
     async def _post(self, path: str) -> None:
         """Issue an authenticated POST with no body. Used for control endpoints."""
         if not self._token:

@@ -46,6 +46,7 @@ if not _HA_NATIVE:
             LOCK = "lock"
             SENSOR = "sensor"
             SIREN = "siren"
+            SWITCH = "switch"
 
         _ha_const.Platform = _Platform
         sys.modules["homeassistant.const"] = _ha_const
