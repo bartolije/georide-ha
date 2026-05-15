@@ -78,6 +78,11 @@ if not _HA_NATIVE:
     _load("helpers")
     _load("stats")
     _load("api")
+    _load("socket_client")
+
+    # `patch("custom_components.georide.X")` needs to traverse the parent
+    # module's attributes — make sure the shim exposes them that way too.
+    sys.modules["custom_components"].georide = _cc_pkg  # type: ignore[attr-defined]
 
 # When HA is native, the path is set by pyproject's `pythonpath` and
 # `from georide.api import X` works through the normal import system.
