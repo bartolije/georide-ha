@@ -35,6 +35,7 @@ from .const import (
     EVENT_LOCK,
     EVENT_MOVING,
 )
+from .socket_client import GeoRideSocketClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         self.beacons: dict[int, list[dict[str, Any]]] = {}
         self.last_trips: dict[int, dict[str, Any] | None] = {}
         self._last_trips_fetched_at: datetime | None = None
+        self._socket: GeoRideSocketClient | None = None
 
     async def _async_update_data(self) -> TrackersById:
         try:
@@ -187,6 +189,132 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
                 )
             else:
                 ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+
+    async def async_start_socket(self, token: str) -> None:
+        """Open the realtime socket (best-effort).
+
+        Failures don't break setup — the integration falls back to REST
+        polling. Reconnects are handled by the underlying socket.io client.
+        """
+        if self._socket is not None:
+            return
+        socket = GeoRideSocketClient(token, self._handle_socket_event)
+        try:
+            await socket.connect()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "GeoRide realtime socket connect failed (%s) — falling back "
+                "to %s polling",
+                err,
+                UPDATE_INTERVAL,
+            )
+            return
+        self._socket = socket
+
+    async def async_stop_socket(self) -> None:
+        if self._socket is None:
+            return
+        try:
+            await self._socket.disconnect()
+        finally:
+            self._socket = None
+
+    async def _handle_socket_event(self, event: str, payload: Any) -> None:
+        """Route a socket.io event to a coordinator-side reaction.
+
+        - `position` / `lockedPosition`: merge into the cached tracker dict
+          and notify listeners (no extra REST call).
+        - `alarm`: fire `georide_alarm_event` with the granular `type`.
+        - `device` / `refreshTrackersInstruction`: trigger a full REST
+          refresh because the tracker list may have changed.
+        - `message`: welcome/info, log only.
+        """
+        if event in ("message",):
+            return
+        if event == "position":
+            self._apply_socket_position(payload)
+        elif event == "lockedPosition":
+            self._apply_socket_lock(payload)
+        elif event == "alarm":
+            self._fire_alarm_from_socket(payload)
+        elif event in ("device", "refreshTrackersInstruction"):
+            await self.async_request_refresh()
+
+    def _apply_socket_position(self, payload: Any) -> None:
+        if not isinstance(payload, dict) or self.data is None:
+            return
+        tid = self._tracker_id_from_payload(payload)
+        if tid is None or tid not in self.data:
+            return
+        tracker = self.data[tid]
+        for key in (
+            "latitude",
+            "longitude",
+            "altitude",
+            "speed",
+            "moving",
+            "fixtime",
+            "odometer",
+            "positionId",
+        ):
+            if key in payload:
+                tracker[key] = payload[key]
+        self.async_set_updated_data(self.data)
+
+    def _apply_socket_lock(self, payload: Any) -> None:
+        if not isinstance(payload, dict) or self.data is None:
+            return
+        tid = self._tracker_id_from_payload(payload)
+        if tid is None or tid not in self.data:
+            return
+        tracker = self.data[tid]
+        for key in (
+            "isLocked",
+            "lockedLatitude",
+            "lockedLongitude",
+            "lockedPositionId",
+            "manualLock",
+        ):
+            if key in payload:
+                tracker[key] = payload[key]
+        self.async_set_updated_data(self.data)
+
+    def _fire_alarm_from_socket(self, payload: Any) -> None:
+        if not isinstance(payload, dict):
+            return
+        tid = self._tracker_id_from_payload(payload)
+        alarm_type = payload.get("type") or payload.get("alarm") or "unknown"
+        # Strip an "alarm_" prefix if GeoRide sends "alarm_vibration" etc.
+        alarm_type = str(alarm_type).removeprefix("alarm_")
+        device_id: str | None = None
+        tracker_name: str | None = None
+        if isinstance(tid, int):
+            device_registry = dr.async_get(self.hass)
+            device = device_registry.async_get_device(
+                identifiers={(DOMAIN, str(tid))}
+            )
+            device_id = device.id if device else None
+            if self.data and tid in self.data:
+                tracker_name = self.data[tid].get("trackerName")
+        self.hass.bus.async_fire(
+            EVENT_ALARM,
+            {
+                "device_id": device_id,
+                "tracker_id": tid,
+                "tracker_name": tracker_name,
+                "type": alarm_type,
+                "source": "realtime",
+                "raw": payload,
+            },
+        )
+
+    @staticmethod
+    def _tracker_id_from_payload(payload: dict[str, Any]) -> int | None:
+        raw = payload.get("trackerId") or payload.get("id")
+        try:
+            return int(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            return None
 
     async def _refresh_beacons(self, trackers: TrackersById) -> None:
         """Fetch beacons for every tracker that reports hasBeacon=True.

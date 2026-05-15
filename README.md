@@ -108,10 +108,17 @@ Assistant on the next restart, same as for trackers.
 
 ## Data updates
 
-The integration polls GeoRide every 60 seconds. There is no real-time push
-in this version; if you need event-driven automations (alarms, crashes),
-poll latency may matter for you. A websocket-based real-time path is on the
-roadmap.
+The integration uses two channels in parallel:
+
+- **Realtime socket.io** (`socket.georide.com`) — when available, position,
+  lock state and alarms are pushed within seconds. Reconnections are
+  handled automatically.
+- **REST polling every 60 s** (`api.georide.com`) — the source of truth.
+  Keeps every entity fresh even when the realtime socket is down or your
+  account is between alarms. Trips are refreshed every 5 min.
+
+If the realtime socket fails (firewall, brief network drop, etc.), the
+integration logs a warning and keeps running on polling alone.
 
 ## Use cases
 
@@ -182,7 +189,7 @@ automations that should not have to poll an entity's state.
 |---|---|---|
 | `georide_lock_event` | `device_id`, `tracker_id`, `tracker_name`, `is_locked` | `isLocked` flips. |
 | `georide_moving_event` | `device_id`, `tracker_id`, `tracker_name`, `moving` | `moving` flips. |
-| `georide_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type` | `isStolen` / `isCrashed` / `hasTheftCaseOpened` flips False → True. `type` is `"stolen"` / `"crashed"` / `"theft_case_opened"`. |
+| `georide_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type` | Polled snapshots (`isStolen` / `isCrashed` / `hasTheftCaseOpened` flip False → True) or realtime alarms pushed by GeoRide's socket. Realtime events also carry `source: "realtime"` and the full `raw` payload, with `type` covering finer-grained alarms (`vibration`, `exitZone`, `crashParking`, `powerCut`, `magnetOn`, etc.). |
 
 ### Example: notify on any alarm transition
 

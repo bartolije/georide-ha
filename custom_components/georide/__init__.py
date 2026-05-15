@@ -42,6 +42,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.runtime_data = coordinator
 
+    # Open the realtime socket. Best-effort: a failure here only means we
+    # rely on REST polling, which is already wired and tested.
+    await coordinator.async_start_socket(entry.data[CONF_TOKEN])
+    entry.async_on_unload(coordinator.async_stop_socket)
+
     _cleanup_stale_devices(
         hass,
         entry,

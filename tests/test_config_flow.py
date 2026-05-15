@@ -63,6 +63,13 @@ def _mock_client(*, login_return=TOKEN, login_raises=None, trackers_raises=None)
 
     fake_session = AsyncMock()
 
+    def _socket_factory(*args, **kwargs):
+        socket = AsyncMock()
+        socket.connect = AsyncMock()
+        socket.disconnect = AsyncMock()
+        socket.connected = False
+        return socket
+
     with patch(
         "custom_components.georide.config_flow.GeoRideApiClient",
         side_effect=_factory,
@@ -75,6 +82,9 @@ def _mock_client(*, login_return=TOKEN, login_raises=None, trackers_raises=None)
     ), patch(
         "custom_components.georide.async_get_clientsession",
         return_value=fake_session,
+    ), patch(
+        "custom_components.georide.coordinator.GeoRideSocketClient",
+        side_effect=_socket_factory,
     ):
         yield
 
