@@ -1,32 +1,18 @@
-"""Unit tests for the trip statistics aggregator (no Home Assistant needed)."""
+"""Unit tests for the trip statistics aggregator."""
 from __future__ import annotations
-
-import importlib.util
-import sys
-from pathlib import Path
 
 import pytest
 
-_STATS_PATH = (
-    Path(__file__).parent.parent / "custom_components" / "georide" / "stats.py"
-)
-_spec = importlib.util.spec_from_file_location("georide_stats_under_test", _STATS_PATH)
-stats = importlib.util.module_from_spec(_spec)
-sys.modules["georide_stats_under_test"] = stats
-_spec.loader.exec_module(stats)
+from custom_components.georide import stats
 
 
 def _trip(**overrides):
-    """Build a trip dict matching the shape returned by GeoRide.
-
-    Sane defaults are present; pass overrides to mutate the test fixture.
-    """
     base = {
         "id": 1,
         "trackerId": 999,
         "startTime": "2026-04-16T06:47:18.600Z",
         "endTime": "2026-04-16T06:54:57.800Z",
-        "distance": 7118,  # meters
+        "distance": 7118,
         "averageSpeed": 30.0,
         "maxSpeed": 60.0,
         "maxAngle": 25.0,
@@ -57,7 +43,6 @@ class TestSummarizeSingleTrip:
         assert r["avg_km_per_trip"] == 7.12
 
     def test_distance_already_in_km(self):
-        # < 1000 → assumed already km
         r = stats.summarize([_trip(distance=42.5)])
         assert r["total_km"] == 42.5
 
@@ -92,7 +77,6 @@ class TestSummarizeMultipleTrips:
 
 class TestSummarizeDefensive:
     def test_missing_keys_dont_crash(self):
-        # Trip with only an id — every numeric is missing.
         r = stats.summarize([{"id": 1}])
         assert r["trips_count"] == 1
         assert r["total_km"] == 0.0
@@ -105,13 +89,11 @@ class TestSummarizeDefensive:
         assert r["total_km"] == 5.0
 
     def test_string_values_are_skipped(self):
-        # Defensive: numeric fields delivered as strings shouldn't crash.
         r = stats.summarize([{"id": 1, "distance": "7118", "maxSpeed": "60"}])
         assert r["total_km"] == 0.0
         assert r["max_top_speed"] is None
 
     def test_bool_values_are_skipped(self):
-        # True is technically int in Python; make sure we don't count it.
         r = stats.summarize([{"id": 1, "distance": True, "maxSpeed": True}])
         assert r["total_km"] == 0.0
         assert r["max_top_speed"] is None
@@ -125,7 +107,6 @@ class TestTripMonth:
         assert stats.trip_month("2026-04-16T08:47:18+02:00") == "2026-04"
 
     def test_epoch_seconds(self):
-        # 2024-01-01 00:00:00 UTC
         assert stats.trip_month(1_704_067_200) == "2024-01"
 
     def test_epoch_milliseconds(self):

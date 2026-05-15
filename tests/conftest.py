@@ -52,20 +52,31 @@ if not _HA_NATIVE:
         sys.modules["homeassistant.const"] = _ha_const
 
     _GR_DIR = Path(__file__).parent.parent / "custom_components" / "georide"
-    _pkg = types.ModuleType("georide")
-    _pkg.__path__ = [str(_GR_DIR)]
-    sys.modules["georide"] = _pkg
+
+    _legacy_pkg = types.ModuleType("georide")
+    _legacy_pkg.__path__ = [str(_GR_DIR)]
+    sys.modules["georide"] = _legacy_pkg
+
+    if "custom_components" not in sys.modules:
+        sys.modules["custom_components"] = types.ModuleType("custom_components")
+    _cc_pkg = types.ModuleType("custom_components.georide")
+    _cc_pkg.__path__ = [str(_GR_DIR)]
+    sys.modules["custom_components.georide"] = _cc_pkg
 
     def _load(submod: str) -> types.ModuleType:
-        name = f"georide.{submod}"
+        name = f"custom_components.georide.{submod}"
         spec = importlib.util.spec_from_file_location(name, _GR_DIR / f"{submod}.py")
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
+        sys.modules[f"georide.{submod}"] = module
         spec.loader.exec_module(module)
-        setattr(_pkg, submod, module)
+        setattr(_cc_pkg, submod, module)
+        setattr(_legacy_pkg, submod, module)
         return module
 
     _load("const")
+    _load("helpers")
+    _load("stats")
     _load("api")
 
 # When HA is native, the path is set by pyproject's `pythonpath` and

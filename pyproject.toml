@@ -1,7 +1,7 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["custom_components"]
+pythonpath = [".", "custom_components"]
 markers = [
     "live: test hits the real GeoRide API (skipped without credentials)",
 ]

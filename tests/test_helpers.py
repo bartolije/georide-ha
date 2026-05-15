@@ -1,23 +1,11 @@
-"""Unit tests for the pure helpers (no Home Assistant needed)."""
+"""Unit tests for the pure helpers."""
 from __future__ import annotations
 
-import importlib.util
-import sys
-import types
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 
-# helpers.py has no HA imports, so we can load it directly here without
-# going through the conftest shim that loads api.py.
-_HELPERS_PATH = (
-    Path(__file__).parent.parent / "custom_components" / "georide" / "helpers.py"
-)
-_spec = importlib.util.spec_from_file_location("georide_helpers_under_test", _HELPERS_PATH)
-helpers = importlib.util.module_from_spec(_spec)
-sys.modules["georide_helpers_under_test"] = helpers
-_spec.loader.exec_module(helpers)
+from custom_components.georide import helpers
 
 
 class TestMetersToKm:
@@ -45,12 +33,12 @@ class TestVoltageToBatteryPct:
     @pytest.mark.parametrize(
         "v,expected",
         [
-            (11.0, 0),  # empty
-            (12.7, 100),  # full
-            (11.85, 50),  # halfway
-            (10.5, 0),  # below clamps
-            (13.5, 100),  # above clamps
-            (13, 100),  # real reading from the user's ZX-10R
+            (11.0, 0),
+            (12.7, 100),
+            (11.85, 50),
+            (10.5, 0),
+            (13.5, 100),
+            (13, 100),
         ],
     )
     def test_curve(self, v, expected):
@@ -61,8 +49,11 @@ class TestVoltageToBatteryPct:
         assert helpers.voltage_to_battery_pct(v) is None
 
     def test_custom_curve(self):
-        # Allow callers to override the empty/full thresholds.
         assert helpers.voltage_to_battery_pct(2.0, empty_v=1.0, full_v=3.0) == 50
+
+    def test_zero_span_returns_none(self):
+        # Edge case: empty_v == full_v would divide by zero; guard returns None.
+        assert helpers.voltage_to_battery_pct(12.0, empty_v=12.0, full_v=12.0) is None
 
 
 class TestParseTimestamp:

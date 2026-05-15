@@ -33,7 +33,7 @@ rules:
   reauthentication-flow: done
   test-coverage:
     status: todo
-    comment: Helpers (26), stats (22), config flow (9) covered. Coordinator and entity platforms still need snapshot tests for the ≥95% target.
+    comment: 69% overall (137 tests). Core modules at 90%+ — coordinator 93%, services 100%, config_flow 98%, helpers 94%, stats 96%, diagnostics 93%, __init__ 92%, const 100%. Entity platform render tests are the remaining gap to ≥95%.
 
   # 🥇 Gold
   devices: done
