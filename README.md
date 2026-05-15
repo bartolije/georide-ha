@@ -209,6 +209,42 @@ automation:
           a {{ trigger.event.data.type }} alarm.
 ```
 
+## Lovelace card (optional)
+
+A single-file custom card lives in `lovelace/georide-card.js`. It bundles
+position (map), lock state, battery, speed, odometer, last-seen, last trip
+stats and the lock + siren buttons into one compact card per tracker.
+
+### Install
+
+1. Copy `lovelace/georide-card.js` from this repo into your Home Assistant
+   `<config>/www/` folder. (You can do this from *Settings → Add-ons →
+   Studio Code Server*, the *File editor* add-on, or any SFTP client.)
+2. Add a Lovelace resource:
+   - *Settings → Dashboards → ⋮ → Resources → Add resource*
+   - URL: `/local/georide-card.js`
+   - Resource type: *JavaScript module*
+3. Open any dashboard in edit mode and add a card:
+   ```yaml
+   type: custom:georide-card
+   device_id: 7e3c…             # pick from the card editor's Stub
+   image: /local/zx10r.jpg      # optional — your moto photo
+   ```
+   The card editor's "Add card" flow lists *GeoRide bike* once the
+   resource is registered. Pick the device matching your moto.
+
+   Tip for the image: GeoRide doesn't expose a bike photo through its
+   API, so drop one yourself in `<config>/www/zx10r.jpg` (or any name)
+   and reference it as `image: /local/zx10r.jpg`. The card uses it as
+   a banner header with a gradient overlay so the bike name stays
+   readable. Without `image:`, the card falls back to a plain text
+   header.
+
+The card discovers entities by walking `device_id` in the entity
+registry, so it works regardless of the entity_id slugs HA picks for
+your bike name. Lock toggle dispatches `lock.lock` / `lock.unlock`;
+siren is gated behind a `confirm()` dialog.
+
 ## Examples
 
 ### Notify when the bike starts moving while you are away
