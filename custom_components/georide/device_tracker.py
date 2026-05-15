@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import GeoRideCoordinator
@@ -17,11 +17,23 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Set up one device_tracker per moto, including ones added later."""
     coordinator: GeoRideCoordinator = entry.runtime_data
-    async_add_entities(
-        GeoRideDeviceTracker(coordinator, tracker_id)
-        for tracker_id in coordinator.data
-    )
+    known: set[int] = set()
+
+    @callback
+    def _async_add_new() -> None:
+        new = []
+        for tracker_id in coordinator.data:
+            if tracker_id in known:
+                continue
+            known.add(tracker_id)
+            new.append(GeoRideDeviceTracker(coordinator, tracker_id))
+        if new:
+            async_add_entities(new)
+
+    _async_add_new()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new))
 
 
 class GeoRideDeviceTracker(GeoRideEntity, TrackerEntity):

@@ -59,7 +59,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         start_d: date = call.data["start_date"]
         end_d: date = call.data["end_date"]
         if start_d > end_d:
-            raise ServiceValidationError("start_date must be on or before end_date")
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_date_range",
+            )
 
         from_iso = _to_utc_iso(start_d)
         to_iso = _to_utc_iso(end_d, end_of_day=True)
@@ -72,7 +75,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             if hasattr(e, "runtime_data") and e.runtime_data is not None
         ]
         if not entries:
-            raise HomeAssistantError("GeoRide integration is not configured")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="not_configured",
+            )
 
         per_tracker: dict[str, Any] = {}
         all_trips: list[dict[str, Any]] = []
@@ -92,14 +98,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     trips = await client.get_trips(tid, from_iso, to_iso)
                 except GeoRideAuthError as err:
                     raise HomeAssistantError(
-                        f"GeoRide token expired or rejected: {err}"
+                        translation_domain=DOMAIN,
+                        translation_key="token_rejected",
+                        translation_placeholders={"error": str(err)},
                     ) from err
                 except GeoRideConnectionError as err:
                     raise HomeAssistantError(
-                        f"Cannot reach GeoRide: {err}"
+                        translation_domain=DOMAIN,
+                        translation_key="cannot_connect_api",
+                        translation_placeholders={"error": str(err)},
                     ) from err
                 except GeoRideError as err:
-                    raise HomeAssistantError(str(err)) from err
+                    raise HomeAssistantError(
+                        translation_domain=DOMAIN,
+                        translation_key="api_error",
+                        translation_placeholders={"error": str(err)},
+                    ) from err
 
                 if trips:
                     _LOGGER.info(
@@ -121,7 +135,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         if requested is not None and not matched:
             raise ServiceValidationError(
-                f"No configured tracker matches tracker_id={requested}"
+                translation_domain=DOMAIN,
+                translation_key="tracker_not_found",
+                translation_placeholders={"tracker_id": str(requested)},
             )
 
         response: dict[str, Any] = {

@@ -31,7 +31,7 @@ from homeassistant.const import (
     UnitOfLength,
     UnitOfSpeed,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
@@ -147,22 +147,43 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Set up tracker + beacon sensors, including ones added after setup.
+
+    Subscribes to the coordinator so that trackers / beacons that appear
+    after the integration is set up (e.g. user pairs a new beacon in the
+    GeoRide app) get their entities created without an HA restart.
+    """
     coordinator: GeoRideCoordinator = entry.runtime_data
-    entities: list[SensorEntity] = []
-    for tracker_id in coordinator.data:
-        entities.extend(
-            GeoRideSensor(coordinator, tracker_id, desc) for desc in SENSORS
-        )
-    for tracker_id, beacons in coordinator.beacons.items():
-        for beacon in beacons:
-            beacon_id = beacon.get("id")
-            if not isinstance(beacon_id, int):
-                continue
-            entities.extend(
-                GeoRideBeaconSensor(coordinator, tracker_id, beacon_id, desc)
-                for desc in BEACON_SENSORS
-            )
-    async_add_entities(entities)
+    known: set[tuple[str, int, str]] = set()
+
+    @callback
+    def _async_add_new() -> None:
+        new: list[SensorEntity] = []
+        for tracker_id in coordinator.data:
+            for desc in SENSORS:
+                key = ("tracker", tracker_id, desc.key)
+                if key in known:
+                    continue
+                known.add(key)
+                new.append(GeoRideSensor(coordinator, tracker_id, desc))
+        for tracker_id, beacons in coordinator.beacons.items():
+            for beacon in beacons:
+                beacon_id = beacon.get("id")
+                if not isinstance(beacon_id, int):
+                    continue
+                for desc in BEACON_SENSORS:
+                    key = ("beacon", beacon_id, desc.key)
+                    if key in known:
+                        continue
+                    known.add(key)
+                    new.append(
+                        GeoRideBeaconSensor(coordinator, tracker_id, beacon_id, desc)
+                    )
+        if new:
+            async_add_entities(new)
+
+    _async_add_new()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new))
 
 
 class GeoRideSensor(GeoRideEntity, SensorEntity):

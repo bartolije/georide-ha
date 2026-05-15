@@ -56,6 +56,32 @@
       "beacon_last_seen": { "name": "Last battery report" }
     }
   },
+  "exceptions": {
+    "token_rejected": {
+      "message": "GeoRide rejected the stored token: {error}"
+    },
+    "cannot_connect_api": {
+      "message": "Cannot reach the GeoRide API: {error}"
+    },
+    "api_error": {
+      "message": "GeoRide API error: {error}"
+    },
+    "not_configured": {
+      "message": "The GeoRide integration is not configured"
+    },
+    "invalid_date_range": {
+      "message": "start_date must be on or before end_date"
+    },
+    "tracker_not_found": {
+      "message": "No configured GeoRide tracker matches tracker_id={tracker_id}"
+    }
+  },
+  "issues": {
+    "subscription_expiring": {
+      "title": "GeoRide subscription expires soon",
+      "description": "The GeoRide subscription for **{tracker_name}** expires on **{expires}**. Renew it on georide.fr before then to avoid losing tracking, alerts and lock control."
+    }
+  },
   "services": {
     "trip_summary": {
       "name": "Trip summary",

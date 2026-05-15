@@ -51,23 +51,17 @@ rules:
   docs-supported-functions: done
   docs-troubleshooting: done
   docs-use-cases: done
-  dynamic-devices:
-    status: todo
-    comment: A coordinator listener that adds entities for newly-paired trackers / beacons without restart.
+  dynamic-devices: done
   entity-category: done
   entity-device-class: done
   entity-disabled-by-default: done
   entity-translations: done
-  exception-translations:
-    status: todo
-    comment: HomeAssistantError messages are English strings; need translation_key support.
+  exception-translations: done
   icon-translations:
     status: exempt
     comment: HA device_class defaults provide sensible icons.
   reconfiguration-flow: done
-  repair-issues:
-    status: todo
-    comment: Plan to raise repair issues on persistent auth fail and on subscription expiring within 7 days.
+  repair-issues: done
   stale-devices: done
 
   # 🏆 Platinum

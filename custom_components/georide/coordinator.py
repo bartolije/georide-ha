@@ -4,17 +4,20 @@ Polls /user/trackers every 60s, indexes the result by trackerId, and fires
 Home Assistant events when state transitions are detected (lock toggle,
 moving start/stop, alarm conditions). Events let users write event-driven
 automations without polling entities themselves.
+
+Also raises a repair issue when a tracker's subscription is about to expire.
 """
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -36,6 +39,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 UPDATE_INTERVAL = timedelta(seconds=60)
+SUBSCRIPTION_WARNING_WINDOW = timedelta(days=7)
 
 TrackersById = dict[int, dict[str, Any]]
 
@@ -96,6 +100,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             indexed[int(tid)] = tracker
 
         await self._refresh_beacons(indexed)
+        self._check_subscription_expiry(indexed)
 
         # `self.data` is the previous snapshot here (set by the base class
         # AFTER this method returns), so we can diff against it for free.
@@ -103,6 +108,42 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             self._fire_state_change_events(self.data, indexed)
 
         return indexed
+
+    def _check_subscription_expiry(self, trackers: TrackersById) -> None:
+        """Raise / clear a repair issue when a subscription is about to expire.
+
+        Triggered when GeoRide's `expires` field puts the subscription end
+        date within `SUBSCRIPTION_WARNING_WINDOW`. The issue clears itself
+        when the field is renewed or the tracker disappears.
+        """
+        now = datetime.now(tz=timezone.utc)
+        for tid, tracker in trackers.items():
+            issue_id = f"subscription_expiring_{tid}"
+            expires_raw = tracker.get("expires")
+            if not isinstance(expires_raw, str):
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+                continue
+            try:
+                expires = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
+            except ValueError:
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+                continue
+
+            if now < expires < now + SUBSCRIPTION_WARNING_WINDOW:
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    issue_id,
+                    is_fixable=False,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key="subscription_expiring",
+                    translation_placeholders={
+                        "tracker_name": str(tracker.get("trackerName") or tid),
+                        "expires": expires.strftime("%Y-%m-%d"),
+                    },
+                )
+            else:
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     async def _refresh_beacons(self, trackers: TrackersById) -> None:
         """Fetch beacons for every tracker that reports hasBeacon=True.

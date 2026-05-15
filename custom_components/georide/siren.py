@@ -5,11 +5,12 @@ from typing import Any
 
 from homeassistant.components.siren import SirenEntity, SirenEntityFeature
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import GeoRideAuthError, GeoRideConnectionError, GeoRideError
+from .const import DOMAIN
 from .coordinator import GeoRideCoordinator
 from .entity import GeoRideEntity
 
@@ -21,11 +22,23 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Set up one siren per tracker, including those added after setup."""
     coordinator: GeoRideCoordinator = entry.runtime_data
-    async_add_entities(
-        GeoRideSiren(coordinator, tracker_id)
-        for tracker_id in coordinator.data
-    )
+    known: set[int] = set()
+
+    @callback
+    def _async_add_new() -> None:
+        new = []
+        for tracker_id in coordinator.data:
+            if tracker_id in known:
+                continue
+            known.add(tracker_id)
+            new.append(GeoRideSiren(coordinator, tracker_id))
+        if new:
+            async_add_entities(new)
+
+    _async_add_new()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new))
 
 
 class GeoRideSiren(GeoRideEntity, SirenEntity):
@@ -61,7 +74,13 @@ class GeoRideSiren(GeoRideEntity, SirenEntity):
             await fn(self._tracker_id)
         except GeoRideAuthError as err:
             raise HomeAssistantError(
-                f"GeoRide token rejected: {err}"
+                translation_domain=DOMAIN,
+                translation_key="token_rejected",
+                translation_placeholders={"error": str(err)},
             ) from err
         except (GeoRideConnectionError, GeoRideError) as err:
-            raise HomeAssistantError(f"GeoRide call failed: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="api_error",
+                translation_placeholders={"error": str(err)},
+            ) from err

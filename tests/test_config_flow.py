@@ -95,6 +95,9 @@ class TestUserFlow:
                 result["flow_id"],
                 {CONF_EMAIL: EMAIL, CONF_PASSWORD: PASSWORD},
             )
+            # Drain the post-create_entry setup under the patch so the
+            # background tasks don't leak a real aiohttp resolver.
+            await hass.async_block_till_done()
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["title"] == EMAIL
         assert result["data"] == {CONF_EMAIL: EMAIL, CONF_TOKEN: TOKEN}
@@ -175,6 +178,10 @@ class TestReauthFlow:
                 result["flow_id"],
                 {CONF_PASSWORD: PASSWORD},
             )
+            # async_update_reload_and_abort schedules the reload as a
+            # background task. Drain it under the patch so the reloaded
+            # async_setup_entry doesn't spin up a real aiohttp resolver.
+            await hass.async_block_till_done()
         assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "reauth_successful"
         assert entry.data[CONF_TOKEN] == "fresh-tok"
@@ -220,6 +227,7 @@ class TestReconfigureFlow:
                 result["flow_id"],
                 {CONF_PASSWORD: PASSWORD},
             )
+            await hass.async_block_till_done()
         assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "reconfigure_successful"
         assert entry.data[CONF_TOKEN] == "reconfig-tok"
