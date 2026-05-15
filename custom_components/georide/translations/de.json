@@ -1,0 +1,118 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GeoRide",
+        "description": "Melde dich mit deinem GeoRide-Konto an.",
+        "data": {
+          "email": "E-Mail",
+          "password": "Passwort"
+        }
+      },
+      "reauth_confirm": {
+        "title": "GeoRide — erneute Anmeldung erforderlich",
+        "description": "Das GeoRide-Token ist abgelaufen. Bitte gib das Passwort für {email} erneut ein.",
+        "data": {
+          "password": "Passwort"
+        }
+      },
+      "reconfigure": {
+        "title": "GeoRide — neu konfigurieren",
+        "description": "Aktualisiere das GeoRide-Token für {email}, indem du das Passwort erneut eingibst.",
+        "data": {
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ungültige Anmeldedaten",
+      "cannot_connect": "Verbindung fehlgeschlagen",
+      "unknown": "Unerwarteter Fehler"
+    },
+    "abort": {
+      "already_configured": "Dieses Konto ist bereits konfiguriert",
+      "reauth_successful": "Erneute Anmeldung erfolgreich",
+      "reconfigure_successful": "Neukonfiguration erfolgreich"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "moving": { "name": "In Bewegung" },
+      "stolen": { "name": "Gestohlen" },
+      "crashed": { "name": "Sturz erkannt" },
+      "has_beacon": { "name": "Beacon verknüpft" },
+      "beacon_firmware_update": { "name": "Firmware-Update verfügbar" }
+    },
+    "sensor": {
+      "odometer": { "name": "Kilometerzähler" },
+      "speed": { "name": "Geschwindigkeit" },
+      "battery_level": { "name": "Batterie" },
+      "last_seen": { "name": "Zuletzt gesehen" },
+      "altitude": { "name": "Höhe" },
+      "external_battery_voltage": { "name": "Externe Batteriespannung" },
+      "internal_battery_voltage": { "name": "Interne Batteriespannung" },
+      "subscription_expires": { "name": "Abonnement endet" },
+      "last_trip_end": { "name": "Ende der letzten Fahrt" },
+      "last_trip_distance": { "name": "Strecke der letzten Fahrt" },
+      "last_trip_duration": { "name": "Dauer der letzten Fahrt" },
+      "last_trip_avg_speed": { "name": "Durchschnittsgeschwindigkeit der letzten Fahrt" },
+      "last_trip_max_speed": { "name": "Höchstgeschwindigkeit der letzten Fahrt" },
+      "last_trip_max_lean_angle": { "name": "Max. Schräglage der letzten Fahrt" },
+      "beacon_battery": { "name": "Batterie" },
+      "beacon_last_seen": { "name": "Letzte Batteriemeldung" }
+    },
+    "switch": {
+      "eco_mode": { "name": "Eco-Modus" }
+    }
+  },
+  "exceptions": {
+    "token_rejected": {
+      "message": "GeoRide hat das gespeicherte Token abgelehnt: {error}"
+    },
+    "cannot_connect_api": {
+      "message": "GeoRide-API nicht erreichbar: {error}"
+    },
+    "api_error": {
+      "message": "GeoRide-API-Fehler: {error}"
+    },
+    "not_configured": {
+      "message": "Die GeoRide-Integration ist nicht konfiguriert"
+    },
+    "invalid_date_range": {
+      "message": "Startdatum muss vor oder gleich dem Enddatum liegen"
+    },
+    "tracker_not_found": {
+      "message": "Kein konfigurierter GeoRide-Tracker entspricht tracker_id={tracker_id}"
+    }
+  },
+  "issues": {
+    "subscription_expiring": {
+      "title": "GeoRide-Abonnement läuft bald ab",
+      "description": "Das GeoRide-Abonnement für **{tracker_name}** läuft am **{expires}** ab. Erneuere es vorher auf georide.fr, um Ortung, Alarme und die Fernsperre zu behalten."
+    }
+  },
+  "services": {
+    "trip_summary": {
+      "name": "Fahrtenübersicht",
+      "description": "Lädt Fahrten in einem Datumsbereich und liefert eine statistische Zusammenfassung.",
+      "fields": {
+        "start_date": {
+          "name": "Startdatum",
+          "description": "Erster Tag, inklusive (UTC)."
+        },
+        "end_date": {
+          "name": "Enddatum",
+          "description": "Letzter Tag, inklusive (UTC)."
+        },
+        "tracker_id": {
+          "name": "Tracker-ID",
+          "description": "Auf einen einzelnen Tracker beschränken. Leer lassen, um alle zu aggregieren."
+        },
+        "include_trips": {
+          "name": "Rohdaten der Fahrten einschließen",
+          "description": "Fügt die komplette Fahrtenliste der Antwort hinzu."
+        }
+      }
+    }
+  }
+}

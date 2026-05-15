@@ -1,0 +1,118 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GeoRide",
+        "description": "Meld je aan met je GeoRide-account.",
+        "data": {
+          "email": "E-mail",
+          "password": "Wachtwoord"
+        }
+      },
+      "reauth_confirm": {
+        "title": "GeoRide — nieuwe aanmelding vereist",
+        "description": "Het GeoRide-token is verlopen. Voer het wachtwoord voor {email} opnieuw in.",
+        "data": {
+          "password": "Wachtwoord"
+        }
+      },
+      "reconfigure": {
+        "title": "GeoRide — herconfigureren",
+        "description": "Ververs het GeoRide-token voor {email} door het wachtwoord opnieuw in te voeren.",
+        "data": {
+          "password": "Wachtwoord"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ongeldige inloggegevens",
+      "cannot_connect": "Verbinding mislukt",
+      "unknown": "Onverwachte fout"
+    },
+    "abort": {
+      "already_configured": "Dit account is al geconfigureerd",
+      "reauth_successful": "Heraanmelding gelukt",
+      "reconfigure_successful": "Herconfiguratie geslaagd"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "moving": { "name": "Beweegt" },
+      "stolen": { "name": "Gestolen" },
+      "crashed": { "name": "Val gedetecteerd" },
+      "has_beacon": { "name": "Beacon gekoppeld" },
+      "beacon_firmware_update": { "name": "Firmware-update beschikbaar" }
+    },
+    "sensor": {
+      "odometer": { "name": "Kilometerteller" },
+      "speed": { "name": "Snelheid" },
+      "battery_level": { "name": "Accu" },
+      "last_seen": { "name": "Laatst gezien" },
+      "altitude": { "name": "Hoogte" },
+      "external_battery_voltage": { "name": "Externe accuspanning" },
+      "internal_battery_voltage": { "name": "Interne accuspanning" },
+      "subscription_expires": { "name": "Abonnement verloopt" },
+      "last_trip_end": { "name": "Einde laatste rit" },
+      "last_trip_distance": { "name": "Afstand laatste rit" },
+      "last_trip_duration": { "name": "Duur laatste rit" },
+      "last_trip_avg_speed": { "name": "Gemiddelde snelheid laatste rit" },
+      "last_trip_max_speed": { "name": "Topsnelheid laatste rit" },
+      "last_trip_max_lean_angle": { "name": "Max. helling laatste rit" },
+      "beacon_battery": { "name": "Accu" },
+      "beacon_last_seen": { "name": "Laatste accu-rapport" }
+    },
+    "switch": {
+      "eco_mode": { "name": "Eco-modus" }
+    }
+  },
+  "exceptions": {
+    "token_rejected": {
+      "message": "GeoRide weigerde het opgeslagen token: {error}"
+    },
+    "cannot_connect_api": {
+      "message": "Geen verbinding met de GeoRide-API: {error}"
+    },
+    "api_error": {
+      "message": "Fout van de GeoRide-API: {error}"
+    },
+    "not_configured": {
+      "message": "De GeoRide-integratie is niet geconfigureerd"
+    },
+    "invalid_date_range": {
+      "message": "De startdatum moet voor of gelijk zijn aan de einddatum"
+    },
+    "tracker_not_found": {
+      "message": "Geen geconfigureerde GeoRide-tracker komt overeen met tracker_id={tracker_id}"
+    }
+  },
+  "issues": {
+    "subscription_expiring": {
+      "title": "GeoRide-abonnement verloopt binnenkort",
+      "description": "Het GeoRide-abonnement voor **{tracker_name}** verloopt op **{expires}**. Vernieuw het op tijd via georide.fr om tracking, alarmen en de afstandsvergrendeling te behouden."
+    }
+  },
+  "services": {
+    "trip_summary": {
+      "name": "Rittenoverzicht",
+      "description": "Haalt ritten op binnen een datumbereik en geeft een statistisch overzicht terug.",
+      "fields": {
+        "start_date": {
+          "name": "Startdatum",
+          "description": "Eerste dag, inclusief (UTC)."
+        },
+        "end_date": {
+          "name": "Einddatum",
+          "description": "Laatste dag, inclusief (UTC)."
+        },
+        "tracker_id": {
+          "name": "Tracker-ID",
+          "description": "Beperk tot één tracker. Leeg laten om alle samen te voegen."
+        },
+        "include_trips": {
+          "name": "Ruwe ritten meesturen",
+          "description": "Voegt de volledige rittenlijst toe aan het antwoord."
+        }
+      }
+    }
+  }
+}

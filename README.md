@@ -44,8 +44,11 @@ Assistant pour que ta moto y apparaisse comme un appareil avec :
    GeoRide*. Tu saisis ton email et ton mot de passe GeoRide une seule
    fois ; seul un jeton est conservé ensuite (pas le mot de passe).
 
-L'interface est traduite : si Home Assistant est en français, toutes
-les entités, erreurs et services sont en français.
+L'interface est traduite en **français, allemand, espagnol, italien et
+néerlandais** : si Home Assistant est configuré dans une de ces
+langues, les entités, erreurs et services s'affichent traduits. Les
+traductions DE / ES / IT / NL sont *initiales et perfectibles* —
+contributions natives bienvenues via pull request.
 
 ---
 

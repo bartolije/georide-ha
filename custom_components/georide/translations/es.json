@@ -1,0 +1,118 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GeoRide",
+        "description": "Inicia sesión con tu cuenta de GeoRide.",
+        "data": {
+          "email": "Correo electrónico",
+          "password": "Contraseña"
+        }
+      },
+      "reauth_confirm": {
+        "title": "GeoRide — se requiere autenticación",
+        "description": "El token de GeoRide ha caducado. Vuelve a introducir la contraseña de {email}.",
+        "data": {
+          "password": "Contraseña"
+        }
+      },
+      "reconfigure": {
+        "title": "GeoRide — reconfigurar",
+        "description": "Actualiza el token de GeoRide para {email} introduciendo de nuevo la contraseña.",
+        "data": {
+          "password": "Contraseña"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Credenciales no válidas",
+      "cannot_connect": "No se pudo conectar",
+      "unknown": "Error inesperado"
+    },
+    "abort": {
+      "already_configured": "Esta cuenta ya está configurada",
+      "reauth_successful": "Autenticación realizada con éxito",
+      "reconfigure_successful": "Reconfiguración correcta"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "moving": { "name": "En movimiento" },
+      "stolen": { "name": "Robada" },
+      "crashed": { "name": "Caída detectada" },
+      "has_beacon": { "name": "Balise asociada" },
+      "beacon_firmware_update": { "name": "Actualización de firmware disponible" }
+    },
+    "sensor": {
+      "odometer": { "name": "Cuentakilómetros" },
+      "speed": { "name": "Velocidad" },
+      "battery_level": { "name": "Batería" },
+      "last_seen": { "name": "Última posición" },
+      "altitude": { "name": "Altitud" },
+      "external_battery_voltage": { "name": "Tensión de la batería externa" },
+      "internal_battery_voltage": { "name": "Tensión de la batería interna" },
+      "subscription_expires": { "name": "Caducidad de la suscripción" },
+      "last_trip_end": { "name": "Fin del último viaje" },
+      "last_trip_distance": { "name": "Distancia del último viaje" },
+      "last_trip_duration": { "name": "Duración del último viaje" },
+      "last_trip_avg_speed": { "name": "Velocidad media del último viaje" },
+      "last_trip_max_speed": { "name": "Velocidad máxima del último viaje" },
+      "last_trip_max_lean_angle": { "name": "Ángulo máx. de inclinación del último viaje" },
+      "beacon_battery": { "name": "Batería" },
+      "beacon_last_seen": { "name": "Último informe de batería" }
+    },
+    "switch": {
+      "eco_mode": { "name": "Modo eco" }
+    }
+  },
+  "exceptions": {
+    "token_rejected": {
+      "message": "GeoRide rechazó el token almacenado: {error}"
+    },
+    "cannot_connect_api": {
+      "message": "No se puede contactar con la API de GeoRide: {error}"
+    },
+    "api_error": {
+      "message": "Error de la API de GeoRide: {error}"
+    },
+    "not_configured": {
+      "message": "La integración GeoRide no está configurada"
+    },
+    "invalid_date_range": {
+      "message": "La fecha de inicio debe ser anterior o igual a la fecha de fin"
+    },
+    "tracker_not_found": {
+      "message": "Ningún tracker GeoRide configurado coincide con tracker_id={tracker_id}"
+    }
+  },
+  "issues": {
+    "subscription_expiring": {
+      "title": "La suscripción de GeoRide está por caducar",
+      "description": "La suscripción GeoRide de **{tracker_name}** caduca el **{expires}**. Renuévala antes en georide.fr para mantener el seguimiento, las alertas y el bloqueo a distancia."
+    }
+  },
+  "services": {
+    "trip_summary": {
+      "name": "Resumen de viajes",
+      "description": "Obtiene los viajes en un rango de fechas y devuelve estadísticas agregadas.",
+      "fields": {
+        "start_date": {
+          "name": "Fecha de inicio",
+          "description": "Primer día, inclusive (UTC)."
+        },
+        "end_date": {
+          "name": "Fecha de fin",
+          "description": "Último día, inclusive (UTC)."
+        },
+        "tracker_id": {
+          "name": "ID del tracker",
+          "description": "Limita a un único tracker. Déjalo vacío para agregar todos."
+        },
+        "include_trips": {
+          "name": "Incluir viajes en bruto",
+          "description": "Añade la lista completa de viajes a la respuesta."
+        }
+      }
+    }
+  }
+}
