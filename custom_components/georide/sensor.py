@@ -40,6 +40,8 @@ from homeassistant.helpers.typing import StateType
 from .coordinator import GeoRideCoordinator
 from .entity import GeoRideBeaconEntity, GeoRideEntity
 from .helpers import (
+    knots_to_kmh as _knots_to_kmh,
+    lean_angle_deg as _lean_angle_deg,
     meters_to_km as _meters_to_km,
     number as _number,
     parse_timestamp as _parse_timestamp,
@@ -54,6 +56,7 @@ class GeoRideSensorEntityDescription(SensorEntityDescription):
     """A sensor description plus a value extractor."""
 
     value_fn: Callable[[dict[str, Any]], StateType | datetime]
+    attrs_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
 
 
 SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
@@ -71,7 +74,7 @@ SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.SPEED,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
-        value_fn=lambda d: _number(d.get("speed")),
+        value_fn=lambda d: _knots_to_kmh(d.get("speed")),
     ),
     GeoRideSensorEntityDescription(
         key="battery_level",
@@ -132,6 +135,58 @@ def _ms_to_s(value: Any) -> int | None:
     return round(float(value) / 1000.0)
 
 
+def _duration_attrs(trip: dict[str, Any]) -> dict[str, Any]:
+    """Break the trip duration down into h/m/s plus a formatted string.
+
+    Kept as attributes so the numeric `native_value` (seconds, DURATION class)
+    still works for HA stats, while the card / dashboard can show "1h 23m 45s".
+    """
+    total = _ms_to_s(trip.get("duration"))
+    if total is None:
+        return {}
+    hours, rem = divmod(total, 3600)
+    minutes, seconds = divmod(rem, 60)
+    if hours:
+        formatted = f"{hours}h {minutes:02d}min {seconds:02d}s"
+    elif minutes:
+        formatted = f"{minutes}min {seconds:02d}s"
+    else:
+        formatted = f"{seconds}s"
+    return {
+        "hours": hours,
+        "minutes": minutes,
+        "seconds": seconds,
+        "formatted": formatted,
+    }
+
+
+def _lean_attrs(trip: dict[str, Any]) -> dict[str, Any]:
+    """Expose left/right lean and the side of the max lean.
+
+    `maxAngle` itself is converted to lean-from-vertical in the sensor's
+    native_value. Here we also surface each side independently and tag the
+    direction the bike was leaning at its peak.
+    """
+    raw = trip.get("maxAngle")
+    out: dict[str, Any] = {}
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        if raw > 90:
+            out["side"] = "right"
+        elif raw < 90:
+            out["side"] = "left"
+    left = _lean_angle_deg(trip.get("maxLeftAngle"))
+    if left is not None:
+        out["max_left"] = left
+    right = _lean_angle_deg(trip.get("maxRightAngle"))
+    if right is not None:
+        out["max_right"] = right
+    # averageAngle is intentionally omitted: it doesn't follow the same
+    # 90°-offset frame as maxAngle (a value of 15.23 reads as a sensible
+    # ~15° average lean, but |15.23-90| = 74.77° is nonsensical). Without
+    # confirmation of its frame, exposing it would mislead.
+    return out
+
+
 LAST_TRIP_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
     GeoRideSensorEntityDescription(
         key="last_trip_end",
@@ -153,6 +208,7 @@ LAST_TRIP_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         value_fn=lambda d: _ms_to_s(d.get("duration")),
+        attrs_fn=_duration_attrs,
     ),
     GeoRideSensorEntityDescription(
         key="last_trip_avg_speed",
@@ -160,7 +216,7 @@ LAST_TRIP_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.SPEED,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
-        value_fn=lambda d: _number(d.get("averageSpeed")),
+        value_fn=lambda d: _knots_to_kmh(d.get("averageSpeed")),
     ),
     GeoRideSensorEntityDescription(
         key="last_trip_max_speed",
@@ -168,15 +224,15 @@ LAST_TRIP_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.SPEED,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
-        value_fn=lambda d: _number(d.get("maxSpeed")),
+        value_fn=lambda d: _knots_to_kmh(d.get("maxSpeed")),
     ),
     GeoRideSensorEntityDescription(
         key="last_trip_max_lean_angle",
         translation_key="last_trip_max_lean_angle",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=DEGREE,
-        entity_registry_enabled_default=False,
-        value_fn=lambda d: _number(d.get("maxAngle")),
+        value_fn=lambda d: _lean_angle_deg(d.get("maxAngle")),
+        attrs_fn=_lean_attrs,
     ),
 )
 
@@ -298,6 +354,14 @@ class GeoRideLastTripSensor(GeoRideEntity, SensorEntity):
     def native_value(self) -> StateType | datetime:
         trip = self.coordinator.last_trips.get(self._tracker_id) or {}
         return self.entity_description.value_fn(trip)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attrs_fn = self.entity_description.attrs_fn
+        if attrs_fn is None:
+            return None
+        trip = self.coordinator.last_trips.get(self._tracker_id) or {}
+        return attrs_fn(trip)
 
 
 class GeoRideMaintenanceSensor(GeoRideEntity, SensorEntity):

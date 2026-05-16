@@ -221,10 +221,11 @@ class TestTrackerSensors:
         s = GeoRideSensor(coord, TID, _desc_by_key(SENSORS, "odometer"))
         assert s.native_value == 34298.15
 
-    def test_speed_passthrough(self):
+    def test_speed_knots_to_kmh(self):
+        # Fixture has speed=42.0 knots. 42.0 × 1.852 = 77.78 km/h.
         coord = _coordinator()
         s = GeoRideSensor(coord, TID, _desc_by_key(SENSORS, "speed"))
-        assert s.native_value == 42.0
+        assert s.native_value == 77.78
 
     def test_battery_level_from_voltage(self):
         coord = _coordinator()
@@ -270,42 +271,105 @@ class TestTrackerSensors:
 # Last-trip sensors
 # ---------------------------------------------------------------------------
 class TestLastTripSensors:
+    # Real payload captured from the GeoRide web app on 2026-05-16, with the
+    # in-app values shown alongside (asserted below):
+    #   distance 124089 m → 124 km
+    #   duration 6412410 ms → ~1h47
+    #   averageSpeed 37.62 knots → 70 km/h
+    #   maxSpeed 100.5 knots → 186 km/h
+    #   maxAngle 121.06 → 31° lean, right side
     TRIP = {
         "id": 7,
-        "endTime": "2026-05-12T18:30:00Z",
-        "distance": 12500,
-        "duration": 1_800_000,  # 30 min in ms
-        "averageSpeed": 60.0,
-        "maxSpeed": 110.0,
-        "maxAngle": 38.5,
+        "endTime": "2026-05-16T09:56:11.200Z",
+        "distance": 124089,
+        "duration": 6412410,
+        "averageSpeed": 37.62,
+        "maxSpeed": 100.5,
+        "maxAngle": 121.06,
+        "maxLeftAngle": 61.77,
+        "maxRightAngle": 121.06,
+        "averageAngle": 15.23,
     }
 
     def test_last_trip_distance_meters_to_km(self):
         coord = _coordinator(last_trips={TID: self.TRIP})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_distance"))
-        assert s.native_value == 12.5
+        assert s.native_value == 124.09  # app shows 124
 
     def test_last_trip_duration_ms_to_s(self):
         coord = _coordinator(last_trips={TID: self.TRIP})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_duration"))
-        assert s.native_value == 1800
+        assert s.native_value == 6412
 
-    def test_last_trip_avg_and_max_speed(self):
+    def test_last_trip_duration_formatted_matches_app(self):
+        # App displays "1:46h"; we show "1h 46min 52s" — same hours/minutes.
+        coord = _coordinator(last_trips={TID: self.TRIP})
+        s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_duration"))
+        assert s.extra_state_attributes == {
+            "hours": 1,
+            "minutes": 46,
+            "seconds": 52,
+            "formatted": "1h 46min 52s",
+        }
+
+    def test_last_trip_duration_formatted_short_trip(self):
+        trip = {**self.TRIP, "duration": 125_000}  # 2min 05s
+        coord = _coordinator(last_trips={TID: trip})
+        s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_duration"))
+        assert s.extra_state_attributes == {
+            "hours": 0,
+            "minutes": 2,
+            "seconds": 5,
+            "formatted": "2min 05s",
+        }
+
+    def test_last_trip_avg_speed_knots_to_kmh_matches_app(self):
+        # App shows 70 km/h. API field is 37.62 knots. 37.62 × 1.852 ≈ 69.67.
         coord = _coordinator(last_trips={TID: self.TRIP})
         avg = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_avg_speed"))
+        assert avg.native_value == 69.67
+
+    def test_last_trip_max_speed_knots_to_kmh_matches_app(self):
+        # App shows 186 km/h. API field is 100.5 knots. 100.5 × 1.852 = 186.13.
+        coord = _coordinator(last_trips={TID: self.TRIP})
         top = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_max_speed"))
-        assert avg.native_value == 60.0
-        assert top.native_value == 110.0
+        assert top.native_value == 186.13
 
     def test_last_trip_end_timestamp(self):
         coord = _coordinator(last_trips={TID: self.TRIP})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_end"))
-        assert s.native_value == datetime(2026, 5, 12, 18, 30, 0, tzinfo=timezone.utc)
+        assert s.native_value == datetime(2026, 5, 16, 9, 56, 11, 200000, tzinfo=timezone.utc)
 
-    def test_last_trip_lean_angle(self):
+    def test_last_trip_lean_angle_matches_app(self):
+        # App shows "31° à droite". API maxAngle 121.06 → |121.06 - 90| = 31.06°.
+        coord = _coordinator(last_trips={TID: self.TRIP})
+        desc = _desc_by_key(LAST_TRIP_SENSORS, "last_trip_max_lean_angle")
+        s = GeoRideLastTripSensor(coord, TID, desc)
+        assert s.native_value == 31.06
+        # Enabled by default — users must see it without registry tweaking.
+        assert desc.entity_registry_enabled_default is not False
+
+    def test_last_trip_lean_angle_attrs(self):
         coord = _coordinator(last_trips={TID: self.TRIP})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_max_lean_angle"))
-        assert s.native_value == 38.5
+        assert s.extra_state_attributes == {
+            "side": "right",
+            "max_left": 28.23,
+            "max_right": 31.06,
+        }
+
+    def test_last_trip_lean_angle_left_side(self):
+        # Symmetric case: bigger left lean than right. maxAngle = maxLeftAngle.
+        trip = {
+            **self.TRIP,
+            "maxAngle": 55.0,
+            "maxLeftAngle": 55.0,
+            "maxRightAngle": 110.0,
+        }
+        coord = _coordinator(last_trips={TID: trip})
+        s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_max_lean_angle"))
+        assert s.native_value == 35.0
+        assert (s.extra_state_attributes or {}).get("side") == "left"
 
     def test_last_trip_none_returns_none(self):
         coord = _coordinator(last_trips={TID: None})

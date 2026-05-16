@@ -71,3 +71,30 @@ def number(value: Any) -> int | float | None:
     if isinstance(value, bool):
         return None
     return value if isinstance(value, (int, float)) else None
+
+
+# GeoRide's API reports every speed (live tracker `speed`, trip `averageSpeed`,
+# trip `maxSpeed`) in knots — not km/h. Verified against the GeoRide web app:
+# averageSpeed=37.62 displays as 70 km/h, maxSpeed=100.5 displays as 186 km/h,
+# both an exact ×1.852 (knots→km/h) match.
+KNOTS_TO_KMH = 1.852
+
+
+def knots_to_kmh(value: Any) -> float | None:
+    """Convert a GeoRide speed payload (knots) to km/h."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return round(float(value) * KNOTS_TO_KMH, 2)
+
+
+def lean_angle_deg(value: Any) -> float | None:
+    """Convert a GeoRide trip angle payload to lean-from-vertical in degrees.
+
+    GeoRide reports angles as offsets from a 90° vertical reference:
+    `maxRightAngle = 90 + right_lean`, `maxLeftAngle = 90 - left_lean`, and
+    `maxAngle` is whichever side had the larger absolute deviation. The
+    physical lean is therefore `|raw - 90|`.
+    """
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return round(abs(float(value) - 90.0), 2)

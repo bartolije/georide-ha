@@ -225,6 +225,9 @@ class GeoRideCard extends LitElement {
     const s = this._stateOf(entityId);
     if (!s || s.state === "unknown" || s.state === "unavailable") return fallback;
     const unit = s.attributes?.unit_of_measurement;
+    // Duration sensors expose a pre-formatted "1h 23min 45s" attribute —
+    // prefer it over the raw "1800 s" rendering.
+    if (s.attributes?.formatted) return s.attributes.formatted;
     return unit ? `${s.state} ${unit}` : s.state;
   }
 
