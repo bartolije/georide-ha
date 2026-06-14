@@ -19,11 +19,17 @@
  * the user's bike name.
  */
 
-import {
-  LitElement,
-  html,
-  css,
-} from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+// Reuse the `lit` that the Home Assistant frontend already ships instead of
+// pulling lit-element from an external CDN (supply-chain risk + offline break
+// + a 2020-era pin). HA defines `ha-panel-lovelace` / `hui-view` as LitElement
+// subclasses; walking their prototype chain hands us the same LitElement base
+// and the `html` / `css` tag functions HA itself uses. This is the canonical
+// no-build pattern for single-file custom cards.
+const LitElement = Object.getPrototypeOf(
+  customElements.get("ha-panel-lovelace") || customElements.get("hui-view")
+);
+const html = LitElement.prototype.html;
+const css = LitElement.prototype.css;
 
 const VERSION = "0.1.0";
 
@@ -173,7 +179,28 @@ class GeoRideCard extends LitElement {
     if (!config) throw new Error("Invalid configuration");
     if (!config.device_id)
       throw new Error("`device_id` is required. Pick your GeoRide device in the card editor.");
+    if (config.image != null && !this._isSafeImageUrl(config.image))
+      throw new Error(
+        "`image` must be an http(s):// URL or a local path (e.g. /local/bike.jpg)."
+      );
     this._config = config;
+  }
+
+  /**
+   * Allow only http(s) URLs or in-instance paths for the banner image.
+   * Blocks `javascript:`/`data:` and anything that could break out of the
+   * `background-image: url('...')` declaration in render().
+   */
+  _isSafeImageUrl(value) {
+    if (typeof value !== "string") return false;
+    if (/[\s'"()\\]/.test(value)) return false; // no CSS url() breakout chars
+    if (value.startsWith("/")) return true; // /local/..., /api/...
+    try {
+      const { protocol } = new URL(value, window.location.origin);
+      return protocol === "http:" || protocol === "https:";
+    } catch {
+      return false;
+    }
   }
 
   getCardSize() {
