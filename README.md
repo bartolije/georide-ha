@@ -42,7 +42,9 @@ Assistant pour que ta moto y apparaisse comme un appareil avec :
 2. Installe **GeoRide** depuis HACS, puis redémarre Home Assistant.
 3. *Réglages → Appareils & Services → Ajouter une intégration →
    GeoRide*. Tu saisis ton email et ton mot de passe GeoRide une seule
-   fois ; seul un jeton est conservé ensuite (pas le mot de passe).
+   fois ; seul un jeton est conservé ensuite (pas le mot de passe), et
+   il est renouvelé automatiquement chaque semaine — pas de
+   ré-authentification mensuelle.
 
 L'interface est traduite en **français, allemand, espagnol, italien et
 néerlandais** : si Home Assistant est configuré dans une de ces
@@ -78,11 +80,15 @@ The integration is configured through the UI. You will be asked for
 your GeoRide account email and password. Only the resulting bearer
 token is persisted — the password is never stored.
 
-If the token is later rejected by GeoRide (subscription expired,
-account locked, password changed), Home Assistant raises a reauth
-notification. The same flow is reachable manually via *Settings →
-Devices & Services → GeoRide → Configure* (a fresh login mints a new
-token without recreating the entry).
+GeoRide tokens expire 30 days after they are minted. The integration
+renews its token automatically once a week (via `/user/new-token`), so
+you should never see a reauth prompt in normal operation — only if
+Home Assistant stays offline long enough for the token to die (30+
+days), if you change your GeoRide password, or if the account is
+locked. In those cases Home Assistant raises a reauth notification.
+The same flow is reachable manually via *Settings → Devices &
+Services → GeoRide → Configure* (a fresh login mints a new token
+without recreating the entry).
 
 ## What this integration exposes
 
@@ -142,6 +148,9 @@ Two channels in parallel:
 
 If the realtime socket fails, the integration logs a warning and keeps
 running on polling alone.
+
+The bearer token is renewed once a week as part of the update cycle;
+the realtime socket picks the new token up on its next reconnection.
 
 ## Services
 
@@ -315,7 +324,8 @@ token. Re-authenticate via the prompt or *Configure → enter password*.
 2. In HACS, *Frontend → GeoRide → Remove* to uninstall the
    `custom_components` files.
 3. The bearer token stays valid on GeoRide's side until it expires
-   naturally. To revoke it sooner, change your GeoRide password.
+   naturally (30 days after it was last renewed). To revoke it sooner,
+   change your GeoRide password.
 
 ## Quality scale
 
@@ -328,7 +338,7 @@ in [`custom_components/georide/quality_scale.yaml`](custom_components/georide/qu
 - 🥇 Gold — **19 / 21** rules (2 marked `exempt`)
 - 🏆 Platinum — **3 / 3** rules
 
-Backed by mypy `--strict`, 350+ tests at 97 % coverage and a CI
+Backed by mypy `--strict`, 276 tests at 96 % coverage and a CI
 workflow that runs both on every push.
 
 ## License

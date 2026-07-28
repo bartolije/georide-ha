@@ -26,7 +26,7 @@ from custom_components.georide.api import (
     GeoRideConnectionError,
     GeoRideError,
 )
-from custom_components.georide.const import DOMAIN
+from custom_components.georide.const import CONF_TOKEN_CREATED_AT, DOMAIN
 
 EMAIL = "rider@example.com"
 PASSWORD = "moto-power"
@@ -110,7 +110,10 @@ class TestUserFlow:
             await hass.async_block_till_done()
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["title"] == EMAIL
-        assert result["data"] == {CONF_EMAIL: EMAIL, CONF_TOKEN: TOKEN}
+        assert result["data"][CONF_EMAIL] == EMAIL
+        assert result["data"][CONF_TOKEN] == TOKEN
+        # Mint date stamped so the coordinator can renew before 30-day expiry.
+        assert CONF_TOKEN_CREATED_AT in result["data"]
 
     async def test_invalid_auth_shows_error(self, hass):
         with _mock_client(login_raises=GeoRideAuthError("bad creds")):

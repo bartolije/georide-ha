@@ -19,6 +19,7 @@ from custom_components.georide.api import (  # noqa: E402
     GeoRideError,
 )
 from custom_components.georide.const import (  # noqa: E402
+    CONF_TOKEN_CREATED_AT,
     DOMAIN,
     EVENT_ALARM,
     EVENT_LOCK,
@@ -54,6 +55,7 @@ def _client(
     client.get_tracker_beacons = AsyncMock(return_value=beacons or [])
     client.get_trips = AsyncMock(return_value=trips or [])
     client.get_maintenance = AsyncMock(return_value=maintenance or [])
+    client.renew_token = AsyncMock(return_value="renewed-token")
     return client
 
 
@@ -170,6 +172,95 @@ class TestSecondaryRefresh:
         # 15min throttle: first hits, second skips.
         assert client.get_maintenance.call_count == 1
         assert coord.maintenance[1][0]["name"] == "Oil"
+
+
+# ---------------------------------------------------------------------------
+# Token renewal
+# ---------------------------------------------------------------------------
+class TestTokenRenewal:
+    def _entry_with_stamp(self, hass, created_at):
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            unique_id="bike@example.com",
+            title="bike@example.com",
+            data={
+                "email": "bike@example.com",
+                "token": "t",
+                CONF_TOKEN_CREATED_AT: created_at,
+            },
+        )
+        entry.add_to_hass(hass)
+        return entry
+
+    async def test_renews_when_mint_date_unknown(self, hass):
+        """Entries created before the feature have no stamp → renew now."""
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+
+        assert client.renew_token.await_count == 1
+        assert entry.data["token"] == "renewed-token"
+        assert CONF_TOKEN_CREATED_AT in entry.data
+
+    async def test_skips_when_token_fresh(self, hass):
+        fresh = datetime.now(tz=timezone.utc).isoformat()
+        entry = self._entry_with_stamp(hass, fresh)
+        client = _client(trackers=[{"trackerId": 1}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+
+        client.renew_token.assert_not_awaited()
+        assert entry.data["token"] == "t"
+
+    async def test_renews_when_token_older_than_interval(self, hass):
+        old = (datetime.now(tz=timezone.utc) - timedelta(days=8)).isoformat()
+        entry = self._entry_with_stamp(hass, old)
+        client = _client(trackers=[{"trackerId": 1}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+
+        assert client.renew_token.await_count == 1
+        assert entry.data["token"] == "renewed-token"
+
+    async def test_renews_when_stamp_unparseable(self, hass):
+        entry = self._entry_with_stamp(hass, "garbage")
+        client = _client(trackers=[{"trackerId": 1}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+
+        assert client.renew_token.await_count == 1
+
+    async def test_failure_keeps_token_and_does_not_break_update(self, hass):
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}])
+        client.renew_token = AsyncMock(side_effect=GeoRideConnectionError("down"))
+        coord = GeoRideCoordinator(hass, entry, client)
+
+        data = await coord._async_update_data()
+        assert 1 in data  # update cycle unaffected
+        assert entry.data["token"] == "t"
+        assert CONF_TOKEN_CREATED_AT not in entry.data
+
+    async def test_failure_retry_is_throttled(self, hass):
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}])
+        client.renew_token = AsyncMock(side_effect=GeoRideConnectionError("down"))
+        coord = GeoRideCoordinator(hass, entry, client)
+
+        await coord._async_update_data()
+        await coord._async_update_data()
+        # Second cycle lands inside TOKEN_RENEWAL_RETRY → no second attempt.
+        assert client.renew_token.await_count == 1
+
+    async def test_socket_receives_new_token(self, hass):
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        coord._socket = MagicMock()
+
+        await coord._async_update_data()
+        coord._socket.update_token.assert_called_once_with("renewed-token")
 
 
 # ---------------------------------------------------------------------------

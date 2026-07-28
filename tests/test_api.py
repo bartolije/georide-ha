@@ -119,6 +119,47 @@ class TestLogin:
 
 
 # ---------------------------------------------------------------------------
+# renew_token
+# ---------------------------------------------------------------------------
+class TestRenewToken:
+    async def test_returns_and_caches_new_token(self):
+        session = _session(get_response=_response(200, {"authToken": "fresh"}))
+        client = GeoRideApiClient(session, token="old")
+        assert await client.renew_token() == "fresh"
+        assert client.token == "fresh"
+
+    async def test_missing_token_raises(self):
+        session = _session()
+        with pytest.raises(GeoRideAuthError):
+            await GeoRideApiClient(session).renew_token()
+
+    async def test_401_raises_auth(self):
+        session = _session(get_response=_response(401, {}))
+        with pytest.raises(GeoRideAuthError):
+            await GeoRideApiClient(session, token="old").renew_token()
+
+    async def test_500_raises_connection(self):
+        session = _session(get_response=_response(500, {}))
+        with pytest.raises(GeoRideConnectionError):
+            await GeoRideApiClient(session, token="old").renew_token()
+
+    async def test_client_error_raises_connection(self):
+        session = _session(get_raises=ClientError("dns"))
+        with pytest.raises(GeoRideConnectionError):
+            await GeoRideApiClient(session, token="old").renew_token()
+
+    async def test_non_dict_response_raises(self):
+        session = _session(get_response=_response(200, ["unexpected"]))
+        with pytest.raises(GeoRideError):
+            await GeoRideApiClient(session, token="old").renew_token()
+
+    async def test_no_token_field_raises_auth_error(self):
+        session = _session(get_response=_response(200, {"unexpected": "shape"}))
+        with pytest.raises(GeoRideAuthError):
+            await GeoRideApiClient(session, token="old").renew_token()
+
+
+# ---------------------------------------------------------------------------
 # Authenticated GETs (get_trackers / get_trips / get_tracker_beacons)
 # ---------------------------------------------------------------------------
 class TestGetTrackers:

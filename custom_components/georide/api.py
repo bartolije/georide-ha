@@ -83,6 +83,48 @@ class GeoRideApiClient:
         self._token = str(token)
         return self._token
 
+    async def renew_token(self) -> str:
+        """Regenerate the bearer token via GET /user/new-token.
+
+        GeoRide tokens expire 30 days after they are minted. This endpoint
+        returns a fresh token from a still-valid one, without needing the
+        password again. The new token replaces the cached one.
+        """
+        if not self._token:
+            raise GeoRideAuthError("Not authenticated; call login() first")
+
+        url = f"{API_HOST}/user/new-token"
+        headers = {"Authorization": f"Bearer {self._token}"}
+        try:
+            async with self._session.get(
+                url, headers=headers, timeout=_TIMEOUT
+            ) as resp:
+                if resp.status in (401, 403):
+                    raise GeoRideAuthError(
+                        f"Token rejected by GeoRide (HTTP {resp.status})"
+                    )
+                resp.raise_for_status()
+                data = await resp.json()
+        except ClientResponseError as err:
+            if err.status in (401, 403):
+                raise GeoRideAuthError(str(err)) from err
+            raise GeoRideConnectionError(str(err)) from err
+        except ClientError as err:
+            raise GeoRideConnectionError(str(err)) from err
+
+        if not isinstance(data, dict):
+            raise GeoRideError(
+                f"Unexpected new-token response shape: {type(data).__name__}"
+            )
+        token = data.get("authToken") or data.get("token") or data.get("access_token")
+        if not token:
+            raise GeoRideAuthError(
+                f"Renewal succeeded but no token field in response (keys: {sorted(data)})"
+            )
+
+        self._token = str(token)
+        return self._token
+
     async def get_trackers(self) -> list[dict[str, Any]]:
         """Return the raw list of trackers for the authenticated user."""
         return await self._get_json_list("/user/trackers")

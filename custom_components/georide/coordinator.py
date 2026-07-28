@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_TOKEN
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
@@ -30,6 +31,7 @@ from .api import (
     GeoRideError,
 )
 from .const import (
+    CONF_TOKEN_CREATED_AT,
     DOMAIN,
     EVENT_ALARM,
     EVENT_LOCK,
@@ -52,6 +54,14 @@ LAST_TRIPS_LOOKBACK = timedelta(days=2)
 # Maintenance items change rarely (user edits them in the GeoRide app).
 # 15 minutes is a polite interval that still picks up changes promptly.
 MAINTENANCE_REFRESH = timedelta(minutes=15)
+
+# GeoRide tokens expire 30 days after being minted. Renewing weekly via
+# /user/new-token keeps a wide safety margin: users only ever see a reauth
+# prompt if HA stays offline for more than ~3 weeks straight.
+TOKEN_RENEWAL_INTERVAL = timedelta(days=7)
+# On renewal failure, wait this long before the next attempt so a flaky
+# endpoint doesn't produce a warning every 60 s update cycle.
+TOKEN_RENEWAL_RETRY = timedelta(hours=1)
 
 TrackersById = dict[int, dict[str, Any]]
 
@@ -95,6 +105,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         self.maintenance: dict[int, list[dict[str, Any]]] = {}
         self._last_trips_fetched_at: datetime | None = None
         self._maintenance_fetched_at: datetime | None = None
+        self._token_renewal_attempted_at: datetime | None = None
         self._socket: GeoRideSocketClient | None = None
 
     async def _async_update_data(self) -> TrackersById:
@@ -116,6 +127,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
                 continue
             indexed[int(tid)] = tracker
 
+        await self._maybe_renew_token()
         await self._refresh_beacons(indexed)
         await self._maybe_refresh_last_trips(indexed)
         await self._maybe_refresh_maintenance(indexed)
@@ -127,6 +139,67 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             self._fire_state_change_events(self.data, indexed)
 
         return indexed
+
+    async def _maybe_renew_token(self) -> None:
+        """Renew the bearer token before its 30-day expiry.
+
+        Runs after a successful /user/trackers fetch, so the current token
+        is known-good. When the token is older than TOKEN_RENEWAL_INTERVAL
+        (or its mint date is unknown — entries created before this feature),
+        a fresh token is fetched via /user/new-token, persisted on the
+        config entry together with its mint date, and handed to the realtime
+        socket for its next reconnection. Failures are logged and retried
+        after TOKEN_RENEWAL_RETRY; a genuinely dead token surfaces through
+        the normal polling path as ConfigEntryAuthFailed anyway.
+        """
+        now = datetime.now(tz=timezone.utc)
+
+        created = self._token_created_at()
+        if created is not None and now - created < TOKEN_RENEWAL_INTERVAL:
+            return
+        if (
+            self._token_renewal_attempted_at is not None
+            and now - self._token_renewal_attempted_at < TOKEN_RENEWAL_RETRY
+        ):
+            return
+
+        self._token_renewal_attempted_at = now
+        try:
+            token = await self.client.renew_token()
+        except GeoRideError as err:
+            _LOGGER.warning(
+                "GeoRide token renewal failed: %s — retrying in %s",
+                err,
+                TOKEN_RENEWAL_RETRY,
+            )
+            return
+
+        self.hass.config_entries.async_update_entry(
+            self.config_entry,
+            data={
+                **self.config_entry.data,
+                CONF_TOKEN: token,
+                CONF_TOKEN_CREATED_AT: now.isoformat(),
+            },
+        )
+        if self._socket is not None:
+            self._socket.update_token(token)
+        _LOGGER.debug(
+            "GeoRide token renewed; next renewal in %s", TOKEN_RENEWAL_INTERVAL
+        )
+
+    def _token_created_at(self) -> datetime | None:
+        """Mint date of the stored token, or None when unknown/unparseable."""
+        raw = self.config_entry.data.get(CONF_TOKEN_CREATED_AT)
+        if not isinstance(raw, str):
+            return None
+        try:
+            created = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+        if created.tzinfo is None:
+            return None
+        return created
 
     async def _maybe_refresh_last_trips(self, trackers: TrackersById) -> None:
         """Refresh last_trips at most every LAST_TRIPS_REFRESH window.
