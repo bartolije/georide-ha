@@ -105,8 +105,8 @@ with the following entities.
 | `sensor` | Speed | Instant speed (km/h). |
 | `sensor` | Battery | Moto battery % computed from external voltage. |
 | `sensor` | Last seen | Timestamp of the latest GPS fix. |
-| `sensor` | Last trip end / distance / duration / avg speed / top speed | Stats of the most recent ride (refreshed every 5 min). |
-| `sensor` | Last trip max lean angle | Disabled by default. |
+| `sensor` | Last trip end / distance / duration / avg speed / top speed | Stats of the most recent ride (refreshed every 5 min). The last ride stays displayed until a new one is recorded, even after a long break or a restart (up to one year back). |
+| `sensor` | Last trip max lean angle | Disabled by default. Lean from vertical in degrees; attributes `max_left`, `max_right` and `side`. |
 | `sensor` | Altitude | Diagnostic, disabled by default. |
 | `sensor` | External / internal battery voltage | Diagnostic. |
 | `sensor` | Subscription expires | Diagnostic, disabled by default. |

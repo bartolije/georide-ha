@@ -25,7 +25,11 @@ from custom_components.georide.const import (  # noqa: E402
     EVENT_LOCK,
     EVENT_MOVING,
 )
-from custom_components.georide.coordinator import GeoRideCoordinator  # noqa: E402
+from custom_components.georide.coordinator import (  # noqa: E402
+    LAST_TRIPS_INITIAL_LOOKBACK,
+    LAST_TRIPS_LOOKBACK,
+    GeoRideCoordinator,
+)
 
 
 def _make_entry(hass):
@@ -159,6 +163,56 @@ class TestSecondaryRefresh:
         coord = GeoRideCoordinator(hass, entry, client)
         await coord._async_update_data()
         assert coord.last_trips[1]["id"] == 9
+
+    async def test_first_trip_lookup_reaches_a_year_back(self, hass):
+        """After a restart the last ride can be months old (winter storage)."""
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}], trips=[{"id": 3, "endTime": "2026-03-01T10:00:00Z"}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+
+        from_iso, to_iso = client.get_trips.call_args.args[1:3]
+        span = datetime.fromisoformat(to_iso.replace("Z", "+00:00")) - datetime.fromisoformat(
+            from_iso.replace("Z", "+00:00")
+        )
+        assert span == LAST_TRIPS_INITIAL_LOOKBACK
+        assert coord.last_trips[1]["id"] == 3
+
+    async def test_last_trip_kept_when_short_window_is_empty(self, hass):
+        """No ride in the last two days must not blank the last-trip sensors."""
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}], trips=[{"id": 3, "endTime": "2026-03-01T10:00:00Z"}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+
+        client.get_trips.return_value = []
+        coord._last_trips_fetched_at = None  # skip the 5 min throttle
+        await coord._async_update_data()
+
+        from_iso, to_iso = client.get_trips.call_args.args[1:3]
+        span = datetime.fromisoformat(to_iso.replace("Z", "+00:00")) - datetime.fromisoformat(
+            from_iso.replace("Z", "+00:00")
+        )
+        assert span == LAST_TRIPS_LOOKBACK
+        assert coord.last_trips[1]["id"] == 3
+
+    async def test_new_trip_replaces_the_kept_one(self, hass):
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}], trips=[{"id": 3, "endTime": "2026-03-01T10:00:00Z"}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+
+        client.get_trips.return_value = [{"id": 4, "endTime": "2026-10-11T10:00:00Z"}]
+        coord._last_trips_fetched_at = None
+        await coord._async_update_data()
+        assert coord.last_trips[1]["id"] == 4
+
+    async def test_no_trip_in_a_year_is_none(self, hass):
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}], trips=[])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+        assert coord.last_trips[1] is None
 
     async def test_maintenance_refresh_throttled(self, hass):
         entry = _make_entry(hass)

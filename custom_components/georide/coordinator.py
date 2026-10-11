@@ -50,6 +50,10 @@ SUBSCRIPTION_WARNING_WINDOW = timedelta(days=7)
 # trade-off — fresh enough for "last trip" semantics, light on the API.
 LAST_TRIPS_REFRESH = timedelta(minutes=5)
 LAST_TRIPS_LOOKBACK = timedelta(days=2)
+# Until a trip is known for a tracker, look back far enough to find the latest
+# ride after a long break (winter storage, HA restart); afterwards the short
+# window above only has to catch new trips.
+LAST_TRIPS_INITIAL_LOOKBACK = timedelta(days=365)
 
 # Maintenance items change rarely (user edits them in the GeoRide app).
 # 15 minutes is a polite interval that still picks up changes promptly.
@@ -205,7 +209,10 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         """Refresh last_trips at most every LAST_TRIPS_REFRESH window.
 
         Stores `self.last_trips[tracker_id]` = most recent trip dict (by
-        `endTime`) or None when the lookback window has no trips. A failed
+        `endTime`). The last trip stays in place when the short window comes
+        back empty: an empty window only means no new ride, and dropping the
+        trip there made every last-trip sensor go unknown two days after a
+        ride. None means no trip in the initial year-long lookback. A failed
         fetch keeps the previous snapshot so the sensors don't flash unknown.
         """
         now = datetime.now(tz=timezone.utc)
@@ -215,9 +222,11 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         ):
             return
 
-        from_iso = (now - LAST_TRIPS_LOOKBACK).strftime("%Y-%m-%dT%H:%M:%SZ")
         to_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         for tid in trackers:
+            known = self.last_trips.get(tid) is not None
+            lookback = LAST_TRIPS_LOOKBACK if known else LAST_TRIPS_INITIAL_LOOKBACK
+            from_iso = (now - lookback).strftime("%Y-%m-%dT%H:%M:%SZ")
             try:
                 trips = await self.client.get_trips(tid, from_iso, to_iso)
             except (GeoRideAuthError, GeoRideConnectionError, GeoRideError) as err:
@@ -230,7 +239,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             if trips:
                 trips.sort(key=lambda t: t.get("endTime") or "", reverse=True)
                 self.last_trips[tid] = trips[0]
-            else:
+            elif not known:
                 self.last_trips[tid] = None
         self._last_trips_fetched_at = now
 
