@@ -2,7 +2,8 @@ trip_summary:
   name: Trip summary
   description: >
     Fetch trips for a date range and return aggregate stats (total km,
-    trip count, km per month, max top speed, max lean angle). Use with
+    trip count, km per month, top speeds in km/h, max lean angle overall
+    and per side, in degrees from vertical). Use with
     `response_variable:` in a script or automation to consume the result.
   fields:
     start_date:

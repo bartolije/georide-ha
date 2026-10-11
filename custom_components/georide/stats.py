@@ -10,9 +10,13 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
+from .helpers import knots_to_kmh, lean_angle_deg
+
 DISTANCE_KEYS = ("distance", "tripDistance", "tripKm", "kmDistance")
 MAX_SPEED_KEYS = ("maxSpeed", "topSpeed", "speedMax")
 MAX_ANGLE_KEYS = ("maxAngle", "leanAngle", "maxLeanAngle", "angleMax")
+MAX_LEFT_ANGLE_KEYS = ("maxLeftAngle",)
+MAX_RIGHT_ANGLE_KEYS = ("maxRightAngle",)
 START_TIME_KEYS = ("startTime", "start_time", "startDate", "startedAt", "start")
 
 
@@ -62,6 +66,8 @@ def summarize(trips: list[dict[str, Any]]) -> dict[str, Any]:
             "avg_top_speed": None,
             "max_top_speed": None,
             "max_lean_angle": None,
+            "max_left_lean_angle": None,
+            "max_right_lean_angle": None,
         }
 
     total_km = 0.0
@@ -69,6 +75,8 @@ def summarize(trips: list[dict[str, Any]]) -> dict[str, Any]:
     speeds: list[float] = []
     max_top_speed: float | None = None
     max_angle: float | None = None
+    max_left: float | None = None
+    max_right: float | None = None
 
     for trip in trips:
         raw_distance = pick(trip, DISTANCE_KEYS)
@@ -85,22 +93,19 @@ def summarize(trips: list[dict[str, Any]]) -> dict[str, Any]:
             if month is not None:
                 km_per_month[month] += km
 
-        raw_max = pick(trip, MAX_SPEED_KEYS)
-        if isinstance(raw_max, (int, float)) and not isinstance(raw_max, bool):
-            speeds.append(float(raw_max))
+        # GeoRide reports speeds in knots, like the live sensors convert.
+        top_speed = knots_to_kmh(pick(trip, MAX_SPEED_KEYS))
+        if top_speed is not None:
+            speeds.append(top_speed)
             max_top_speed = (
-                float(raw_max)
-                if max_top_speed is None
-                else max(max_top_speed, float(raw_max))
+                top_speed if max_top_speed is None else max(max_top_speed, top_speed)
             )
 
-        raw_angle = pick(trip, MAX_ANGLE_KEYS)
-        if isinstance(raw_angle, (int, float)) and not isinstance(raw_angle, bool):
-            max_angle = (
-                float(raw_angle)
-                if max_angle is None
-                else max(max_angle, float(raw_angle))
-            )
+        # Angles are offsets from a 90° vertical: compare the lean itself, or
+        # a left lean (raw below 90) would always lose to any right lean.
+        max_angle = _max_or(max_angle, lean_angle_deg(pick(trip, MAX_ANGLE_KEYS)))
+        max_left = _max_or(max_left, lean_angle_deg(pick(trip, MAX_LEFT_ANGLE_KEYS)))
+        max_right = _max_or(max_right, lean_angle_deg(pick(trip, MAX_RIGHT_ANGLE_KEYS)))
 
     return {
         "trips_count": len(trips),
@@ -110,4 +115,13 @@ def summarize(trips: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_top_speed": round(sum(speeds) / len(speeds), 1) if speeds else None,
         "max_top_speed": max_top_speed,
         "max_lean_angle": max_angle,
+        "max_left_lean_angle": max_left,
+        "max_right_lean_angle": max_right,
     }
+
+
+def _max_or(current: float | None, value: float | None) -> float | None:
+    """Running maximum that ignores missing values."""
+    if value is None:
+        return current
+    return value if current is None else max(current, value)

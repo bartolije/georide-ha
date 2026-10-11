@@ -28,7 +28,7 @@ Assistant pour que ta moto y apparaisse comme un appareil avec :
 - 🚨 une **sirène** déclenchable + des événements HA quand l'alarme se
   déclenche (vibration, choc, sortie de zone…)
 - 🔋 sa **batterie en %**, sa **vitesse**, son **compteur kilométrique**,
-  son **dernier trajet** (distance, durée, vitesse max, angle max)
+  son **dernier trajet** (distance, durée, vitesse max, angle max à gauche et à droite)
 - 🛠️ un **capteur diagnostique par item de maintenance** que tu as
   configuré dans l'app GeoRide (vidange, chaîne, pneus…)
 - 🏷️ tes **badges Bluetooth** apparaissent comme appareils séparés avec
@@ -191,9 +191,11 @@ trackers:
       total_km: 743.2
       avg_km_per_trip: 41.3
       km_per_month: { "2026-04": 312.5, "2026-05": 430.7 }
-      avg_top_speed: 138.2
-      max_top_speed: 184.0
-      max_lean_angle: 47.3
+      avg_top_speed: 138.2        # km/h
+      max_top_speed: 184.0        # km/h
+      max_lean_angle: 47.3        # degrees from vertical, either side
+      max_left_lean_angle: 47.3
+      max_right_lean_angle: 44.1
 aggregate:
   # same shape as `summary`, aggregated across every tracker
 ```
