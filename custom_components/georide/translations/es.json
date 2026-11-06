@@ -62,6 +62,9 @@
       "beacon_battery": { "name": "Batería" },
       "beacon_last_seen": { "name": "Último informe de batería" }
     },
+    "siren": {
+      "siren": { "name": "Sirena" }
+    },
     "switch": {
       "eco_mode": { "name": "Modo eco" }
     }

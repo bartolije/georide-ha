@@ -55,7 +55,6 @@ class GeoRideSiren(GeoRideEntity, SirenEntity):
     """
 
     _attr_supported_features = SirenEntityFeature.TURN_ON
-    _attr_name = "Siren"
     _attr_translation_key = "siren"
 
     def __init__(self, coordinator: GeoRideCoordinator, tracker_id: int) -> None:

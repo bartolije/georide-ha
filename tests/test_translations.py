@@ -45,3 +45,16 @@ def test_translation_matches_en_keys(reference_keys: set[str], lang: str):
     extra = keys - reference_keys
     assert not missing, f"{lang}.json is missing keys: {sorted(missing)}"
     assert not extra, f"{lang}.json has extra keys not in en: {sorted(extra)}"
+
+
+def test_icons_point_at_translated_entities():
+    """Every icons.json entity key must be a translation_key HA can resolve."""
+    root = _TRANSLATIONS.parent
+    with (root / "icons.json").open() as f:
+        icons = json.load(f)
+    with (root / "strings.json").open() as f:
+        strings = json.load(f)
+    for platform, entities in icons["entity"].items():
+        missing = set(entities) - set(strings["entity"].get(platform, {}))
+        assert not missing, f"icons.json {platform} keys without translation: {sorted(missing)}"
+    assert set(icons["services"]) <= set(strings["services"])

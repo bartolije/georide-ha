@@ -1,0 +1,23 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "has_beacon": { "default": "mdi:key-wireless" }
+    },
+    "sensor": {
+      "altitude": { "default": "mdi:image-filter-hdr" },
+      "last_trip_max_lean_angle": { "default": "mdi:angle-acute" }
+    },
+    "siren": {
+      "siren": { "default": "mdi:alarm-light" }
+    },
+    "switch": {
+      "eco_mode": {
+        "default": "mdi:leaf",
+        "state": { "off": "mdi:leaf-off" }
+      }
+    }
+  },
+  "services": {
+    "trip_summary": { "service": "mdi:chart-line" }
+  }
+}

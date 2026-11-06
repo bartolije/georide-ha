@@ -319,11 +319,15 @@ dans [`custom_components/georide/quality_scale.yaml`](custom_components/georide/
 
 - 🥉 Bronze : **18 / 18** règles
 - 🥈 Argent : **10 / 10** règles
-- 🥇 Or : **19 / 21** règles (2 marquées `exempt`)
-- 🏆 Platine : **3 / 3** règles
+- 🥇 Or : **19 / 21** règles, les 2 autres exemptées (découverte sur le
+  réseau local, sans objet pour un service cloud)
+- 🏆 Platine : **2 / 3** règles, la 3e exemptée (aucune dépendance
+  externe : le client de l'API est dans l'intégration)
 
-Le tout vérifié par mypy `--strict` et 254 tests (97 % de couverture),
-lancés par la CI à chaque push.
+Le tout vérifié par mypy `--strict` et 255 tests (97 % de couverture),
+lancés par la CI à chaque push. C'est une auto-évaluation : Home
+Assistant n'audite l'échelle de qualité que pour les intégrations
+officielles.
 
 ## Licence
 

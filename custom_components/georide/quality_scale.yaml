@@ -53,9 +53,7 @@ rules:
   entity-disabled-by-default: done
   entity-translations: done
   exception-translations: done
-  icon-translations:
-    status: exempt
-    comment: HA device_class defaults provide sensible icons.
+  icon-translations: done
   reconfiguration-flow: done
   repair-issues: done
   stale-devices: done
@@ -64,7 +62,5 @@ rules:
   async-dependency:
     status: exempt
     comment: No third-party dependency; the API client is in-tree and async.
-  inject-websession:
-    status: exempt
-    comment: Same as async-dependency.
+  inject-websession: done
   strict-typing: done
