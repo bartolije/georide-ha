@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import ClientError
+from multidict import CIMultiDict
 
 from custom_components.georide.api import (
     SESSION_COOKIE,
@@ -27,12 +28,20 @@ VID = "vehicle_01"
 TID = "tracker_01"
 
 
-def _resp(status: int = 200, body: Any = None, cookies: dict[str, str] | None = None) -> MagicMock:
+def _resp(status: int = 200, body: Any = None, set_cookie: list[str] | None = None) -> MagicMock:
     resp = MagicMock()
     resp.status = status
     resp.json = AsyncMock(return_value=body)
-    resp.cookies = {k: MagicMock(value=v) for k, v in (cookies or {}).items()}
+    resp.headers = CIMultiDict(("Set-Cookie", h) for h in set_cookie or [])
     return resp
+
+
+# Real header shape (value replaced): the `Partitioned` flag makes
+# http.cookies before Python 3.14 drop the whole cookie.
+SET_COOKIE = (
+    f"{SESSION_COOKIE}=tok.s%2Big%3D; Max-Age=7776000; Path=/; HttpOnly; Secure; "
+    "SameSite=None; Partitioned"
+)
 
 
 class FakeSession:
@@ -123,11 +132,12 @@ class TestAuth:
 
     async def test_verify_otp_returns_signed_cookie(self):
         client, session = _client(
-            {("POST", "/auth/otp/verify"): _resp(200, {"token": "tok"}, {SESSION_COOKIE: "tok.sig"})},
+            {("POST", "/auth/otp/verify"): _resp(200, {"token": "tok"}, ["other=1; Path=/", SET_COOKIE])},
             token=None,
         )
-        assert await client.verify_otp("me@example.com", "123456") == "tok.sig"
-        assert client.token == "tok.sig"
+        # Kept URL-encoded, exactly as the app sends it back.
+        assert await client.verify_otp("me@example.com", "123456") == "tok.s%2Big%3D"
+        assert client.token == "tok.s%2Big%3D"
         assert session.calls[0][2]["json"] == {"email": "me@example.com", "otp": "123456"}
 
     @pytest.mark.parametrize("status", [400, 401, 422])

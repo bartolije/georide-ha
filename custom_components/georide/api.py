@@ -92,12 +92,12 @@ class GeoRideApiClient:
                     raise GeoRideAuthError(f"GeoRide rejected the code (HTTP {resp.status})")
                 if resp.status >= 400:
                     raise GeoRideConnectionError(f"HTTP {resp.status} on /auth/otp/verify")
-                cookie = resp.cookies.get(SESSION_COOKIE)
+                token = _session_cookie(resp.headers.getall("Set-Cookie", []))
         except ClientError as err:
             raise GeoRideConnectionError(str(err)) from err
-        if cookie is None or not cookie.value:
+        if not token:
             raise GeoRideAuthError("Code accepted but no session cookie returned")
-        self._token = cookie.value
+        self._token = token
         return self._token
 
     # -- data ---------------------------------------------------------------
@@ -292,6 +292,19 @@ class GeoRideApiClient:
         if resp.status >= 500:
             raise GeoRideConnectionError(f"HTTP {resp.status} on {path}")
         raise GeoRideError(f"HTTP {resp.status} {code or ''} on {method} {path}".strip())
+
+
+def _session_cookie(set_cookie_headers: list[str]) -> str | None:
+    """Value of the session cookie, kept URL-encoded as the server sent it.
+
+    Parsed by hand: before Python 3.14, http.cookies drops the whole cookie
+    because of its `Partitioned` attribute, so `resp.cookies` comes back empty.
+    """
+    for header in set_cookie_headers:
+        name, _, rest = header.partition("=")
+        if name.strip() == SESSION_COOKIE:
+            return rest.split(";", 1)[0].strip() or None
+    return None
 
 
 def _tracker_payload(
