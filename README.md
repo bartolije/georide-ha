@@ -2,175 +2,158 @@
   <img src="logo.png" alt="GeoRide" width="380">
 </p>
 
-# GeoRide for Home Assistant
+# GeoRide pour Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![release](https://img.shields.io/github/v/release/bartolije/georide-ha)](https://github.com/bartolije/georide-ha/releases)
 [![ci](https://github.com/bartolije/georide-ha/actions/workflows/ci.yml/badge.svg)](https://github.com/bartolije/georide-ha/actions)
 
-Unofficial Home Assistant integration for [GeoRide](https://georide.fr)
-motorcycle GPS trackers. Brings every tracker on your account into
-Home Assistant as a device with live position, lock control, alarm
-events, last-trip stats and per-item maintenance counters. Talks to the
-GeoRide v2 API (`api-v2.georide.com`, the one the app uses since 5.5),
-polled every 60 s.
+Intégration Home Assistant **non officielle** pour les traceurs GPS moto
+[GeoRide](https://georide.fr). GeoRide est un traceur antivol français
+avec verrouillage, alerte vibration, détection de chute et angle
+d'inclinaison. L'intégration branche ton compte GeoRide à Home Assistant
+pour que chaque moto y apparaisse comme un appareil avec :
+
+- 📍 sa **position** sur la carte
+- 🔒 un **verrou** à distance (GeoRide 1 ; le GeoRide 3 se verrouille
+  seul avec le badge ou le téléphone)
+- 🚨 la **sirène Live Alarm** déclenchable, et des événements HA quand
+  l'alarme se déclenche (vibration, mouvement…), avec environ 1 min de
+  délai
+- 🔋 sa **batterie en %**, son **compteur kilométrique** et son **dernier
+  trajet** (distance, durée, vitesses, angle max à gauche et à droite)
+- 🛠️ un **capteur par entretien** configuré dans l'appli GeoRide
+  (vidange, chaîne, pneus…)
+- 🏷️ tes **badges Bluetooth**, comme appareils séparés avec leur
+  batterie
+
+L'intégration utilise l'API v2 de GeoRide (`api-v2.georide.com`), celle
+de l'appli depuis sa version 5.5, interrogée toutes les 60 s.
 
 ---
 
-## 🇫🇷 En français — démarrage rapide
+## Installation
 
-GeoRide est un traceur GPS antivol français pour moto, avec verrouillage
-à distance, alerte vibration, détection de chute et angle de gite. Cette
-intégration **non-officielle** branche ton compte GeoRide à Home
-Assistant pour que ta moto y apparaisse comme un appareil avec :
+[![Ouvrir Home Assistant et ajouter ce dépôt à HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=bartolije&repository=georide-ha&category=integration)
 
-- 📍 sa **position en direct** sur la carte
-- 🔒 un bouton **verrouiller / déverrouiller** à distance (GeoRide 1 ; le
-  GeoRide 3 se verrouille seul avec le badge ou le téléphone)
-- 🚨 la **sirène Live Alarm** déclenchable + des événements HA quand
-  l'alarme se déclenche (vibration, mouvement…), avec 1 min de délai
-- 🔋 sa **batterie en %**, son **compteur kilométrique**,
-  son **dernier trajet** (distance, durée, vitesse max, angle max à gauche et à droite)
-- 🛠️ un **capteur diagnostique par item de maintenance** que tu as
-  configuré dans l'app GeoRide (vidange, chaîne, pneus…)
-- 🏷️ tes **badges Bluetooth** apparaissent comme appareils séparés avec
-  leur batterie
+[![Ouvrir Home Assistant et ajouter l'intégration GeoRide.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=georide)
 
-### Installation en 3 étapes
-
-1. Dans HACS, ajoute ce dépôt en *custom repository* (badge bleu plus
-   bas, ou *HACS → Integrations → ⋮ → Custom repositories →*
-   `https://github.com/bartolije/georide-ha`).
+1. Le premier badge ajoute ce dépôt à HACS (ou *HACS → Intégrations →
+   ⋮ → Dépôts personnalisés →* `https://github.com/bartolije/georide-ha`).
 2. Installe **GeoRide** depuis HACS, puis redémarre Home Assistant.
-3. *Réglages → Appareils & Services → Ajouter une intégration →
-   GeoRide*. Tu saisis ton email et ton mot de passe GeoRide une seule
-   fois ; seul un jeton est conservé ensuite (pas le mot de passe), et
-   il est renouvelé automatiquement chaque semaine — pas de
-   ré-authentification mensuelle.
+3. Le second badge ouvre l'ajout de l'intégration (ou *Paramètres →
+   Appareils et services → Ajouter une intégration → GeoRide*).
 
-L'interface est traduite en **français, allemand, espagnol, italien et
-néerlandais** : si Home Assistant est configuré dans une de ces
-langues, les entités, erreurs et services s'affichent traduits. Les
-traductions DE / ES / IT / NL sont *initiales et perfectibles* —
-contributions natives bienvenues via pull request.
+Home Assistant 2024.11 ou plus récent est requis.
 
----
+### Installation manuelle (sans HACS)
 
-## Quick install
+Copie `custom_components/georide/` dans le dossier
+`config/custom_components/` de Home Assistant, redémarre, puis ajoute
+l'intégration depuis *Paramètres → Appareils et services*.
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=bartolije&repository=georide-ha&category=integration)
+L'interface est traduite en **français, anglais, allemand, espagnol,
+italien et néerlandais**. Les traductions DE / ES / IT / NL sont
+perfectibles : les contributions natives sont bienvenues.
 
-[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=georide)
+## Connexion et session
 
-1. First badge adds this repo to HACS as a custom repository.
-2. Install **GeoRide** in HACS, restart Home Assistant.
-3. Second badge opens the config flow.
+Comme l'appli GeoRide, l'intégration se connecte **sans mot de passe** :
+tu saisis l'e-mail de ton compte, GeoRide t'envoie un code à usage
+unique par e-mail, tu le tapes. Seule la session qui en résulte est
+conservée.
 
-Both badges use the [My Home Assistant](https://my.home-assistant.io)
-redirect. Home Assistant 2024.11 or newer required.
+**Une session GeoRide dure 90 jours.** Quand elle expire, GeoRide
+refuse les appels et Home Assistant te demande de **te réauthentifier**
+(notification dans *Paramètres*, et sur la carte GeoRide dans
+*Appareils et services*). Il suffit de la valider : un
+nouveau code arrive par e-mail, tu le tapes et tout repart, sans
+recréer l'intégration ni perdre l'historique. En attendant, les
+entités GeoRide restent indisponibles.
 
-### Manual install (no HACS)
+La même démarche sert :
+- après la mise à jour depuis une version qui utilisait l'ancienne API
+  (0.16 et avant) : l'ancien jeton est refusé par l'API v2 ;
+- à la main, quand tu veux : *Paramètres → Appareils et services →
+  GeoRide → ⋮ → Reconfigurer*.
 
-Copy `custom_components/georide/` into your Home Assistant
-`config/custom_components/` directory and restart. Then add the
-integration through *Settings → Devices & Services → Add Integration →
-GeoRide*.
+## Entités
 
-## Configuration
+Chaque traceur du compte devient un appareil avec les entités
+suivantes.
 
-The integration is configured through the UI. Like the GeoRide app,
-it logs in without a password: enter your account email, GeoRide
-emails you a one-time code, type it in. Only the resulting session is
-persisted.
-
-GeoRide sessions last 90 days. When one expires (or after upgrading
-from a version that used the old API, whose token the v2 API rejects),
-Home Assistant raises a reauth notification: confirm, and type the new
-code GeoRide emails you. The same flow is reachable manually via
-*Settings → Devices & Services → GeoRide → Configure*, without
-recreating the entry.
-
-## What this integration exposes
-
-For each tracker on the account, one Home Assistant device is created
-with the following entities.
-
-| Platform | Entity | What it shows |
+| Plateforme | Entité | Contenu |
 |---|---|---|
-| `device_tracker` | (tracker name) | Live GPS position; renders on the Lovelace map. |
-| `lock` | (tracker name) | Manual lock of GeoRide 1 trackers only (GeoRide 3 locks itself with the badge / phone, so no entity). |
-| `siren` | Siren | Rings the Live Alarm for the duration set in the app. Created only when the tracker has a Live Alarm. Turn-on only. |
-| `switch` | Eco mode | Toggle eco mode ("bike without battery" in the app). Applied at the tracker's next connection, which can take hours while it sleeps. |
-| `sensor` | Odometer | Cumulative kilometres ridden. |
-| `sensor` | Speed | Unavailable: the v2 API no longer reports instant speed. |
-| `sensor` | Battery | Moto battery % computed from external voltage. |
-| `sensor` | Last seen | Timestamp of the latest GPS fix. |
-| `sensor` | Last trip end / distance / duration / avg speed / top speed | Stats of the most recent ride (refreshed every 5 min). The last ride stays displayed until a new one is recorded, even after a long break or a restart (up to one year back). |
-| `sensor` | Last trip max lean angle | Disabled by default. Lean from vertical in degrees; attributes `max_left`, `max_right` and `side`. |
-| `sensor` | Altitude | Diagnostic, disabled by default. Unavailable with the v2 API. |
-| `sensor` | External / internal battery voltage | Diagnostic. Internal voltage is unavailable with the v2 API (it reports a percentage). |
-| `sensor` | Subscription expires | Diagnostic, disabled by default. |
-| `sensor` | (per maintenance item) | One diagnostic sensor per item you configured in the GeoRide app. Auto-detects km vs days. |
-| `binary_sensor` | Moving | `DeviceClass.MOVING`. |
-| `binary_sensor` | Stolen | `DeviceClass.SAFETY` — on = reported stolen. |
-| `binary_sensor` | Crashed | `DeviceClass.PROBLEM` — on = crash detected. |
-| `binary_sensor` | Has beacon | Diagnostic, disabled by default. |
+| `device_tracker` | (nom de la moto) | Position GPS, affichée sur la carte. |
+| `lock` | (nom de la moto) | Verrou manuel, traceurs GeoRide 1 seulement. Le GeoRide 3 se verrouille seul (badge, téléphone) : pas d'entité. |
+| `siren` | Sirène | Fait sonner la Live Alarm pendant la durée réglée dans l'appli. Créée seulement si le traceur a une Live Alarm. Déclenchement uniquement. |
+| `switch` | Mode éco | Mode « moto sans batterie » de l'appli. Appliqué à la prochaine connexion du traceur, ce qui peut prendre des heures quand il est en veille. |
+| `sensor` | Compteur kilométrique | Kilomètres parcourus. |
+| `sensor` | Vitesse | Indisponible : l'API v2 ne donne plus la vitesse instantanée. |
+| `sensor` | Batterie | Batterie de la moto en %, calculée depuis la tension. |
+| `sensor` | Dernière position | Horodatage du dernier point GPS. |
+| `sensor` | Dernier trajet : fin, distance, durée, vitesse moyenne, vitesse max | Le trajet le plus récent (rafraîchi toutes les 5 min). Il reste affiché jusqu'au suivant, même après l'hivernage ou un redémarrage (jusqu'à un an). |
+| `sensor` | Angle d'inclinaison max du dernier trajet | Désactivé par défaut. Degrés depuis la verticale ; attributs `max_left`, `max_right` et `side`. |
+| `sensor` | Altitude | Diagnostic, désactivé par défaut. Indisponible avec l'API v2. |
+| `sensor` | Tension batterie externe / interne | Diagnostic. La tension interne est indisponible avec l'API v2 (elle donne un pourcentage). |
+| `sensor` | Fin de l'abonnement | Diagnostic, désactivé par défaut. |
+| `sensor` | (un par entretien) | Un capteur diagnostic par entretien configuré dans l'appli, en km ou en jours restants (négatif = en retard). |
+| `binary_sensor` | En mouvement | Déduit de l'âge du dernier point GPS (moins de 5 min). |
+| `binary_sensor` | Volée / Chute détectée | Inconnus avec l'API v2, qui ne donne plus ces informations. |
+| `binary_sensor` | Badge associé | Diagnostic, désactivé par défaut. |
 
-Trackers and beacons that disappear from your GeoRide account are
-removed from Home Assistant on the next restart. New ones appear
-automatically within ~60 seconds.
+Les traceurs et badges retirés du compte GeoRide disparaissent de Home
+Assistant au redémarrage suivant ; les nouveaux apparaissent en une
+minute environ.
 
-### Beacons
+### Badges
 
-Every Bluetooth beacon paired with a tracker (key fob, top-case
-sensor, TPMS, …) shows up as a separate device nested under its
-tracker via `via_device`.
+Chaque badge Bluetooth associé à un traceur apparaît comme un appareil
+rattaché à sa moto.
 
-| Platform | Entity | What it shows |
+| Plateforme | Entité | Contenu |
 |---|---|---|
-| `sensor` | Battery | Beacon battery in %. |
-| `sensor` | Last battery report | Timestamp of the last battery-level update. |
-| `binary_sensor` | Firmware update available | `DeviceClass.UPDATE`. |
+| `sensor` | Batterie | Batterie du badge en %. |
+| `sensor` | Dernière remontée batterie | Indisponible avec l'API v2. |
+| `binary_sensor` | Mise à jour du firmware disponible | Inconnue avec l'API v2. |
 
-Beacon model (e.g. `gen-1`) is shown on the device card; the MAC
-address is attached as a HA connection.
+Le modèle du badge s'affiche sur la fiche de l'appareil, et son adresse
+MAC y est rattachée.
 
-## Data updates
+## Rafraîchissement des données
 
-REST polling every 60 s against `api-v2.georide.com` (vehicle,
-tracker, battery, mode, subscription and the latest tracker events).
-Trips are refreshed every 5 min, maintenance items and badges every
-15 min. The v2 API has no realtime channel (the GeoRide app no longer
-opens the old socket.io stream), so alarms reach Home Assistant within
-about a minute. "Moving" is inferred from the age of the last GPS fix
-(under 5 min).
+L'intégration interroge `api-v2.georide.com` toutes les 60 s (véhicule,
+traceur, batterie, mode, abonnement et derniers événements du
+traceur). Les trajets sont rafraîchis toutes les 5 min, les entretiens
+et les badges toutes les 15 min. L'API v2 n'a pas de canal temps réel
+(l'appli n'ouvre plus l'ancien flux socket.io) : les alarmes arrivent
+dans Home Assistant en une minute environ.
 
-## Services
+## Service `georide.trip_summary`
 
-### `georide.trip_summary`
-
-Fetch trips over a date range and return aggregate stats. Service
-responses require a script or automation with `response_variable:`.
+Récupère les trajets d'une période et renvoie des statistiques. La
+réponse d'un service se récupère dans un script ou une automatisation
+avec `response_variable:`.
 
 ```yaml
 script:
-  georide_last_30_days:
+  georide_30_derniers_jours:
     sequence:
       - service: georide.trip_summary
         data:
           start_date: "{{ (now() - timedelta(days=30)).date() }}"
           end_date: "{{ now().date() }}"
-        response_variable: summary
+        response_variable: resume
       - service: notify.persistent_notification
         data:
           message: >
-            {{ summary.aggregate.trips_count }} trips,
-            {{ summary.aggregate.total_km }} km
-            (avg {{ summary.aggregate.avg_km_per_trip }} km).
-            Max top speed: {{ summary.aggregate.max_top_speed }} km/h.
+            {{ resume.aggregate.trips_count }} trajets,
+            {{ resume.aggregate.total_km }} km
+            ({{ resume.aggregate.avg_km_per_trip }} km en moyenne).
+            Vitesse max : {{ resume.aggregate.max_top_speed }} km/h.
 ```
 
-Response shape:
+Forme de la réponse :
 
 ```yaml
 range:
@@ -186,117 +169,124 @@ trackers:
       km_per_month: { "2026-04": 312.5, "2026-05": 430.7 }
       avg_top_speed: 138.2        # km/h
       max_top_speed: 184.0        # km/h
-      max_lean_angle: 47.3        # degrees from vertical, either side
+      max_lean_angle: 47.3        # degrés depuis la verticale, côté le plus penché
       max_left_lean_angle: 47.3
       max_right_lean_angle: 44.1
 aggregate:
-  # same shape as `summary`, aggregated across every tracker
+  # même forme que `summary`, tous traceurs confondus
 ```
 
-Pass `tracker_id` to restrict to one tracker; `include_trips: true`
-adds the raw trip list so a Lovelace card can render them on a map.
+`tracker_id` limite le calcul à un traceur ; `include_trips: true`
+ajoute la liste brute des trajets (pour une carte Lovelace, par
+exemple).
 
-## Events
+## Événements
 
-The coordinator fires Home Assistant events on state transitions and
-on new tracker events. Useful for event-driven automations.
+L'intégration déclenche des événements Home Assistant, utiles pour les
+automatisations.
 
-| Event | `event_data` keys | Fired when |
+| Événement | Données (`event_data`) | Déclenché quand |
 |---|---|---|
-| `georide_lock_event` | `device_id`, `tracker_id`, `tracker_name`, `is_locked` | `isLocked` flips. |
-| `georide_moving_event` | `device_id`, `tracker_id`, `tracker_name`, `moving` | `moving` flips. |
-| `georide_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type`, `occurred_at`, `source` | Each new tracker event, `type` being the GeoRide kind without its `event/` prefix: `vibration/detected`, `movement/detected`, `displacement/detected`, `power/restored`, … (types changed with the v2 API). |
+| `georide_lock_event` | `device_id`, `tracker_id`, `tracker_name`, `is_locked` | le verrou change d'état. |
+| `georide_moving_event` | `device_id`, `tracker_id`, `tracker_name`, `moving` | la moto se met en mouvement ou s'arrête. |
+| `georide_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type`, `occurred_at`, `source` | à chaque nouvel événement du traceur. `type` est le type GeoRide sans le préfixe `event/` : `vibration/detected`, `movement/detected`, `displacement/detected`, `power/restored`… (types changés avec l'API v2). |
 
-## Automation examples
+## Exemples d'automatisations
 
-### Notify when the bike starts moving while you are away
+### Prévenir si la moto bouge en ton absence
 
 ```yaml
 automation:
-  - alias: GeoRide moved while away
+  - alias: GeoRide - la moto bouge en mon absence
     trigger:
       platform: state
-      entity_id: binary_sensor.z900_moving
+      entity_id: binary_sensor.z900_en_mouvement
       to: "on"
     condition:
       condition: state
-      entity_id: person.me
+      entity_id: person.moi
       state: not_home
     action:
-      service: notify.mobile_app_my_phone
+      service: notify.mobile_app_mon_telephone
       data:
-        title: Bike moving
-        message: "Your bike just started moving. Check the map."
+        title: La moto bouge
+        message: "Ta moto vient de se mettre en mouvement. Regarde la carte."
 ```
 
-### Push notification on every alarm
+### Notification à chaque alarme
 
 ```yaml
 automation:
-  - alias: GeoRide alarm
+  - alias: GeoRide - alarme
     trigger:
       platform: event
       event_type: georide_alarm_event
     action:
-      service: notify.mobile_app_my_phone
+      service: notify.mobile_app_mon_telephone
       data:
-        title: "GeoRide alarm: {{ trigger.event.data.type }}"
-        message: "{{ trigger.event.data.tracker_name }} triggered."
+        title: "Alarme GeoRide : {{ trigger.event.data.type }}"
+        message: "{{ trigger.event.data.tracker_name }} a déclenché une alerte."
 ```
 
-### Low-battery alert
+### Batterie faible
 
 ```yaml
 automation:
-  - alias: GeoRide low battery
+  - alias: GeoRide - batterie faible
     trigger:
       platform: numeric_state
-      entity_id: sensor.z900_battery
+      entity_id: sensor.z900_batterie
       below: 20
     action:
       service: notify.persistent_notification
       data:
-        message: "Bike battery is at {{ states('sensor.z900_battery') }} %."
+        message: "La batterie de la moto est à {{ states('sensor.z900_batterie') }} %."
 ```
 
-## Lovelace card
+## Carte Lovelace
 
-A single-file custom card lives in `lovelace/georide-card.js`. It
-bundles the map, lock toggle, battery, speed, odometer, last-seen and
-last trip stats into one compact widget per tracker. Optional bike
-photo as a banner backdrop.
+Une carte personnalisée tient dans `lovelace/georide-card.js`. Elle
+regroupe la carte, le verrou, la batterie, la vitesse, le compteur, la
+dernière position et le dernier trajet dans un seul bloc par moto, avec
+une photo de la moto en bandeau si tu veux.
 
-### Install
+### Installation
 
-1. Copy `lovelace/georide-card.js` into your Home Assistant
-   `<config>/www/` folder.
-2. *Settings → Dashboards → ⋮ → Resources → Add resource* — URL
-   `/local/georide-card.js`, type *JavaScript module*.
-3. In a dashboard edit mode, *Add card → GeoRide bike*.
+1. Copie `lovelace/georide-card.js` dans le dossier `<config>/www/` de
+   Home Assistant.
+2. *Paramètres → Tableaux de bord → ⋮ → Ressources → Ajouter une
+   ressource* : URL `/local/georide-card.js`, type *Module JavaScript*.
+3. En mode édition d'un tableau de bord : *Ajouter une carte → GeoRide
+   bike*.
 
 ```yaml
 type: custom:georide-card
-device_id: <pick from card editor>
-image: /local/zx10r.jpg   # optional — drop a bike photo in /config/www/
+device_id: <à choisir dans l'éditeur de la carte>
+image: /local/zx10r.jpg   # facultatif : dépose une photo dans /config/www/
 ```
 
-GeoRide's API doesn't expose a bike photo, so the `image:` field lets
-you bring your own. Without it, the card falls back to a text header.
+L'API GeoRide ne fournit pas de photo de la moto : le champ `image:`
+permet d'utiliser la tienne. Sans lui, la carte affiche un en-tête
+texte.
 
-## Known limitations
+## Limites connues
 
-- **Battery percentage is approximated** from external voltage with a
-  linear 11.0 V → 0 %, 12.7 V → 100 % curve. Real lead-acid discharge
-  curves are non-linear; treat as an estimate.
-- **Siren state is write-only.** GeoRide's API does not report siren
-  state back; the integration shows it as unknown.
-- **No instant speed, altitude, stolen or crashed flag** with the v2
-  API: those entities stay unavailable.
-- **Custom integration**: not in core HA. Updates ship through HACS.
+- **La batterie en % est une estimation** : courbe linéaire de 11,0 V
+  (0 %) à 12,7 V (100 %), alors que la décharge réelle d'une batterie
+  au plomb ne l'est pas.
+- **L'état de la sirène n'est pas lisible** : l'API ne le renvoie pas,
+  l'entité l'affiche comme inconnu.
+- **Pas de vitesse instantanée, d'altitude, ni d'indicateur vol ou
+  chute** avec l'API v2.
+- **Alarmes avec environ 1 min de délai** : il n'y a plus de temps
+  réel.
+- **Intégration personnalisée** : elle n'est pas dans Home Assistant de
+  base, les mises à jour passent par HACS.
 
-## Troubleshooting
+## Dépannage
 
-Enable debug logs to see what the integration is fetching:
+Pour voir ce que l'intégration récupère, active les journaux de
+débogage :
 
 ```yaml
 logger:
@@ -305,37 +295,36 @@ logger:
     custom_components.georide: debug
 ```
 
-For a full snapshot, *Settings → Devices & Services → GeoRide → ⋮ →
-Download diagnostics*. The session, lat/lon and email are
-redacted automatically.
+Pour un instantané complet : *Paramètres → Appareils et services →
+GeoRide → ⋮ → Télécharger les diagnostics*. La session, les
+coordonnées GPS et l'e-mail y sont masqués.
 
-If the integration shows as red after install: most often an expired
-session. Re-authenticate via the prompt or *Configure* (a new code is
-emailed).
+Si l'intégration apparaît en erreur, c'est le plus souvent une session
+expirée : valide la notification de nouvelle authentification (ou
+*Reconfigurer*), un nouveau code est envoyé par e-mail.
 
-## Removal
+## Suppression
 
-1. *Settings → Devices & Services → GeoRide → ⋮ → Delete*. Every
-   device, entity and the entry itself are removed.
-2. In HACS, *Frontend → GeoRide → Remove* to uninstall the
-   `custom_components` files.
-3. The session stays valid on GeoRide's side until it expires
-   (90 days).
+1. *Paramètres → Appareils et services → GeoRide → ⋮ → Supprimer* :
+   appareils, entités et intégration sont retirés.
+2. Dans HACS : *GeoRide → ⋮ → Supprimer* pour retirer les fichiers de
+   `custom_components`.
+3. La session reste valable chez GeoRide jusqu'à son expiration
+   (90 jours).
 
-## Quality scale
+## Qualité
 
-This integration declares the
-[Home Assistant Integration Quality Scale](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
-in [`custom_components/georide/quality_scale.yaml`](custom_components/georide/quality_scale.yaml):
+L'intégration déclare l'[échelle de qualité des intégrations Home Assistant](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
+dans [`custom_components/georide/quality_scale.yaml`](custom_components/georide/quality_scale.yaml) :
 
-- 🥉 Bronze — **18 / 18** rules
-- 🥈 Silver — **10 / 10** rules
-- 🥇 Gold — **19 / 21** rules (2 marked `exempt`)
-- 🏆 Platinum — **3 / 3** rules
+- 🥉 Bronze : **18 / 18** règles
+- 🥈 Argent : **10 / 10** règles
+- 🥇 Or : **19 / 21** règles (2 marquées `exempt`)
+- 🏆 Platine : **3 / 3** règles
 
-Backed by mypy `--strict`, 276 tests at 96 % coverage and a CI
-workflow that runs both on every push.
+Le tout vérifié par mypy `--strict` et 254 tests (97 % de couverture),
+lancés par la CI à chaque push.
 
-## License
+## Licence
 
 [MIT](LICENSE)

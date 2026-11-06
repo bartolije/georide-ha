@@ -17,6 +17,7 @@ import pytest
 pytest.importorskip("pytest_homeassistant_custom_component")
 
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_EMAIL, CONF_TOKEN
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -224,3 +225,39 @@ class TestReconfigureFlow:
         assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "reconfigure_successful"
         assert entry.data[CONF_TOKEN] == "reconfig.sig"
+
+
+# ---------------------------------------------------------------------------
+# Session expiry (90 days): GeoRide answers 401, HA must ask for a new code
+# ---------------------------------------------------------------------------
+def _reauth_flows(hass):
+    return [
+        f for f in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        if f["context"]["source"] == config_entries.SOURCE_REAUTH
+    ]
+
+
+class TestSessionExpiry:
+    async def test_expired_session_at_startup_asks_reauth(self, hass):
+        entry = _entry(hass, token="expired.sig")
+        with _mock_client(trackers_raises=GeoRideAuthError("HTTP 401")):
+            assert not await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.SETUP_ERROR
+        [flow] = _reauth_flows(hass)
+        assert flow["step_id"] == "reauth_confirm"
+
+    async def test_session_expiring_while_running_asks_reauth(self, hass):
+        entry = _entry(hass, token="ok.sig")
+        with _mock_client() as clients:
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+            assert entry.state is ConfigEntryState.LOADED
+            assert _reauth_flows(hass) == []
+
+            clients[-1].get_trackers.side_effect = GeoRideAuthError("HTTP 401")
+            await entry.runtime_data.async_refresh()
+            await hass.async_block_till_done()
+            [flow] = _reauth_flows(hass)
+            assert flow["step_id"] == "reauth_confirm"
+            await hass.config_entries.async_unload(entry.entry_id)
