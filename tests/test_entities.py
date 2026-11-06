@@ -53,6 +53,7 @@ from custom_components.georide.sensor import (  # noqa: E402
     GeoRideMaintenanceSensor,
     GeoRideSensor,
 )
+from homeassistant.components.siren import SirenEntityFeature  # noqa: E402
 from custom_components.georide.siren import GeoRideSiren  # noqa: E402
 from custom_components.georide.switch import GeoRideEcoModeSwitch  # noqa: E402
 
@@ -221,11 +222,12 @@ class TestTrackerSensors:
         s = GeoRideSensor(coord, TID, _desc_by_key(SENSORS, "odometer"))
         assert s.native_value == 34298.15
 
-    def test_speed_knots_to_kmh(self):
-        # Fixture has speed=42.0 knots. 42.0 × 1.852 = 77.78 km/h.
+    def test_speed_absent_in_v2_is_unavailable(self):
         coord = _coordinator()
+        coord.data[TID].pop("speed", None)
         s = GeoRideSensor(coord, TID, _desc_by_key(SENSORS, "speed"))
-        assert s.native_value == 77.78
+        assert s.native_value is None
+        assert s.available is False
 
     def test_battery_level_from_voltage(self):
         coord = _coordinator()
@@ -271,49 +273,46 @@ class TestTrackerSensors:
 # Last-trip sensors
 # ---------------------------------------------------------------------------
 class TestLastTripSensors:
-    # Real payload captured from the GeoRide web app on 2026-05-16, with the
-    # in-app values shown alongside (asserted below):
-    #   distance 124089 m → 124 km
-    #   duration 6412410 ms → ~1h47
-    #   averageSpeed 37.62 knots → 70 km/h
-    #   maxSpeed 100.5 knots → 186 km/h
-    #   maxAngle 121.06 → 31° lean, right side
+    # Real v2 payload (list item + /metrics) of the 2026-09-13 ride, with the
+    # values the GeoRide app 5.5.6 shows for it (asserted below):
+    #   distance 277956 m → 278 km
+    #   duration 16378 s → 4h32min
+    #   maxSpeed 167.2356 km/h → 167 km/h
+    #   lean left 47.7 / right 47.3 (trip maxLeanAngle -47.71) → 48°
     TRIP = {
-        "id": 7,
-        "endTime": "2026-05-16T09:56:11.200Z",
-        "distance": 124089,
-        "duration": 6412410,
-        "averageSpeed": 37.62,
-        "maxSpeed": 100.5,
-        "maxAngle": 121.06,
-        "maxLeftAngle": 61.77,
-        "maxRightAngle": 121.06,
-        "averageAngle": 15.23,
+        "id": "trip_merge_01m2zfc0zpevdbna7ws7p1g3qg",
+        "endTime": "2026-09-13T17:32:41.400Z",
+        "distance": 277956,
+        "duration": 16378,
+        "maxSpeed": 167.2356,
+        "averageSpeed": 61,
+        "maxLeftAngle": 47.7,
+        "maxRightAngle": 47.3,
     }
 
     def test_last_trip_distance_meters_to_km(self):
         coord = _coordinator(last_trips={TID: self.TRIP})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_distance"))
-        assert s.native_value == 124.09  # app shows 124
+        assert s.native_value == 277.96  # app shows 278
 
-    def test_last_trip_duration_ms_to_s(self):
+    def test_last_trip_duration_seconds(self):
         coord = _coordinator(last_trips={TID: self.TRIP})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_duration"))
-        assert s.native_value == 6412
+        assert s.native_value == 16378
 
     def test_last_trip_duration_formatted_matches_app(self):
-        # App displays "1:46h"; we show "1h 46min 52s" — same hours/minutes.
+        # App displays "4h 32min".
         coord = _coordinator(last_trips={TID: self.TRIP})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_duration"))
         assert s.extra_state_attributes == {
-            "hours": 1,
-            "minutes": 46,
-            "seconds": 52,
-            "formatted": "1h 46min 52s",
+            "hours": 4,
+            "minutes": 32,
+            "seconds": 58,
+            "formatted": "4h 32min 58s",
         }
 
     def test_last_trip_duration_formatted_short_trip(self):
-        trip = {**self.TRIP, "duration": 125_000}  # 2min 05s
+        trip = {**self.TRIP, "duration": 125}  # 2min 05s
         coord = _coordinator(last_trips={TID: trip})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_duration"))
         assert s.extra_state_attributes == {
@@ -323,29 +322,26 @@ class TestLastTripSensors:
             "formatted": "2min 05s",
         }
 
-    def test_last_trip_avg_speed_knots_to_kmh_matches_app(self):
-        # App shows 70 km/h. API field is 37.62 knots. 37.62 × 1.852 ≈ 69.67.
+    def test_last_trip_avg_speed_kmh(self):
         coord = _coordinator(last_trips={TID: self.TRIP})
         avg = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_avg_speed"))
-        assert avg.native_value == 69.67
+        assert avg.native_value == 61
 
-    def test_last_trip_max_speed_knots_to_kmh_matches_app(self):
-        # App shows 186 km/h. API field is 100.5 knots. 100.5 × 1.852 = 186.13.
+    def test_last_trip_max_speed_matches_app(self):
         coord = _coordinator(last_trips={TID: self.TRIP})
         top = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_max_speed"))
-        assert top.native_value == 186.13
+        assert top.native_value == 167.24  # app shows 167
 
     def test_last_trip_end_timestamp(self):
         coord = _coordinator(last_trips={TID: self.TRIP})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_end"))
-        assert s.native_value == datetime(2026, 5, 16, 9, 56, 11, 200000, tzinfo=timezone.utc)
+        assert s.native_value == datetime(2026, 9, 13, 17, 32, 41, 400000, tzinfo=timezone.utc)
 
     def test_last_trip_lean_angle_matches_app(self):
-        # App shows "31° à droite". API maxAngle 121.06 → |121.06 - 90| = 31.06°.
         coord = _coordinator(last_trips={TID: self.TRIP})
         desc = _desc_by_key(LAST_TRIP_SENSORS, "last_trip_max_lean_angle")
         s = GeoRideLastTripSensor(coord, TID, desc)
-        assert s.native_value == 31.06
+        assert s.native_value == 47.7  # app shows 48°
         # Enabled by default — users must see it without registry tweaking.
         assert desc.entity_registry_enabled_default is not False
 
@@ -353,23 +349,17 @@ class TestLastTripSensors:
         coord = _coordinator(last_trips={TID: self.TRIP})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_max_lean_angle"))
         assert s.extra_state_attributes == {
-            "side": "right",
-            "max_left": 28.23,
-            "max_right": 31.06,
+            "side": "left",
+            "max_left": 47.7,
+            "max_right": 47.3,
         }
 
-    def test_last_trip_lean_angle_left_side(self):
-        # Symmetric case: bigger left lean than right. maxAngle = maxLeftAngle.
-        trip = {
-            **self.TRIP,
-            "maxAngle": 55.0,
-            "maxLeftAngle": 55.0,
-            "maxRightAngle": 110.0,
-        }
+    def test_last_trip_lean_without_metrics_uses_signed_trip_angle(self):
+        trip = {"id": "trip_1", "maxLeanAngle": 24.31}  # positive = right
         coord = _coordinator(last_trips={TID: trip})
         s = GeoRideLastTripSensor(coord, TID, _desc_by_key(LAST_TRIP_SENSORS, "last_trip_max_lean_angle"))
-        assert s.native_value == 35.0
-        assert (s.extra_state_attributes or {}).get("side") == "left"
+        assert s.native_value == 24.31
+        assert s.extra_state_attributes == {"side": "right"}
 
     def test_last_trip_none_returns_none(self):
         coord = _coordinator(last_trips={TID: None})
@@ -600,11 +590,9 @@ class TestSiren:
         await siren.async_turn_on()
         coord.client.siren_on.assert_awaited_once_with(TID)
 
-    async def test_turn_off_calls_client(self):
-        coord = _coordinator()
-        siren = GeoRideSiren(coord, TID)
-        await siren.async_turn_off()
-        coord.client.siren_off.assert_awaited_once_with(TID)
+    async def test_trigger_only_no_turn_off(self):
+        siren = GeoRideSiren(_coordinator(), TID)
+        assert siren.supported_features == SirenEntityFeature.TURN_ON
 
     async def test_auth_error_maps_to_home_assistant_error(self):
         coord = _coordinator()
@@ -615,10 +603,10 @@ class TestSiren:
 
     async def test_connection_error_maps(self):
         coord = _coordinator()
-        coord.client.siren_off = AsyncMock(side_effect=GeoRideConnectionError("net"))
+        coord.client.siren_on = AsyncMock(side_effect=GeoRideConnectionError("net"))
         siren = GeoRideSiren(coord, TID)
         with pytest.raises(HomeAssistantError):
-            await siren.async_turn_off()
+            await siren.async_turn_on()
 
 
 # ---------------------------------------------------------------------------
@@ -700,9 +688,9 @@ class TestSetupEntry:
         # 8 tracker sensors + 6 last_trip + 2 maintenance + 2 beacon = 18 expected.
         assert len(added) == len(SENSORS) + len(LAST_TRIP_SENSORS) + 2 + len(BEACON_SENSORS)
 
-    async def test_sensor_setup_skips_beacon_without_int_id(self, hass):
+    async def test_sensor_setup_skips_beacon_without_id(self, hass):
         entry, coord = await _entry_with_coord(
-            hass, beacons={TID: [{"id": "not-int"}]}
+            hass, beacons={TID: [{"id": None}]}
         )
         added: list = []
         await sensor_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
@@ -727,8 +715,8 @@ class TestSetupEntry:
         # 4 tracker binary sensors + 1 beacon binary sensor = 5
         assert len(added) == len(BINARY_SENSORS) + len(BEACON_BINARY_SENSORS)
 
-    async def test_binary_sensor_skips_beacon_without_int_id(self, hass):
-        entry, _ = await _entry_with_coord(hass, beacons={TID: [{"id": "x"}]})
+    async def test_binary_sensor_skips_beacon_without_id(self, hass):
+        entry, _ = await _entry_with_coord(hass, beacons={TID: [{"id": None}]})
         added: list = []
         await bs_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
         assert all(not isinstance(b, GeoRideBeaconBinarySensor) for b in added)
@@ -753,11 +741,18 @@ class TestSetupEntry:
         await lock_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
         assert len(added) == 1
 
-    async def test_siren_setup_creates_one(self, hass):
-        entry, _ = await _entry_with_coord(hass)
+    async def test_siren_setup_creates_one_with_live_alarm(self, hass):
+        tracker = {**TRACKER, "capabilities": ["accessory/live-alarm"]}
+        entry, _ = await _entry_with_coord(hass, trackers=[tracker])
         added: list = []
         await siren_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
         assert len(added) == 1
+
+    async def test_siren_setup_skips_without_live_alarm(self, hass):
+        entry, _ = await _entry_with_coord(hass)
+        added: list = []
+        await siren_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
+        assert added == []
 
     async def test_switch_setup_creates_eco_mode(self, hass):
         entry, _ = await _entry_with_coord(hass)

@@ -15,7 +15,7 @@ def _trip(**overrides):
         "distance": 7118,
         "averageSpeed": 30.0,
         "maxSpeed": 60.0,
-        "maxAngle": 25.0,
+        "maxLeanAngle": 25.0,
     }
     base.update(overrides)
     return base
@@ -48,21 +48,24 @@ class TestSummarizeSingleTrip:
         r = stats.summarize([_trip(distance=42.5)])
         assert r["total_km"] == 42.5
 
-    def test_max_and_avg_speed_converted_from_knots(self):
-        # GeoRide reports knots; 112.1 kn is a 207.6 km/h top speed.
-        r = stats.summarize([_trip(maxSpeed=112.1)])
-        assert r["max_top_speed"] == 207.61
-        assert r["avg_top_speed"] == 207.6
+    def test_speeds_are_kmh(self):
+        # v2 reports km/h: the 2026-09-13 ride shows 167 km/h in the app.
+        r = stats.summarize([_trip(maxSpeed=167.2356)])
+        assert r["max_top_speed"] == 167.24
+        assert r["avg_top_speed"] == 167.2
 
-    def test_max_lean_angle_is_lean_from_vertical(self):
-        # Raw 145.7 is 55.7° of right lean, 42.29 is 47.71° of left lean.
-        assert stats.summarize([_trip(maxAngle=145.7)])["max_lean_angle"] == 55.7
-        assert stats.summarize([_trip(maxAngle=42.29)])["max_lean_angle"] == 47.71
+    def test_signed_trip_lean_compared_by_magnitude(self):
+        # Negative = left lean.
+        assert stats.summarize([_trip(maxLeanAngle=-47.71)])["max_lean_angle"] == 47.71
+        assert stats.summarize([_trip(maxLeanAngle=24.31)])["max_lean_angle"] == 24.31
 
-    def test_left_and_right_lean(self):
-        r = stats.summarize([_trip(maxAngle=42.29, maxLeftAngle=42.29, maxRightAngle=120.37)])
-        assert r["max_left_lean_angle"] == 47.71
-        assert r["max_right_lean_angle"] == 30.37
+    def test_left_and_right_lean_from_metrics(self):
+        trip = _trip(maxLeftAngle=47.7, maxRightAngle=47.3)
+        del trip["maxLeanAngle"]  # list items don't carry it
+        r = stats.summarize([trip])
+        assert r["max_left_lean_angle"] == 47.7
+        assert r["max_right_lean_angle"] == 47.3
+        assert r["max_lean_angle"] == 47.7
 
     def test_km_per_month(self):
         r = stats.summarize([_trip(startTime="2026-04-16T06:47:18Z", distance=10_000)])
@@ -80,14 +83,13 @@ class TestSummarizeMultipleTrips:
         assert r["total_km"] == 35.0
         assert r["avg_km_per_trip"] == pytest.approx(11.67, abs=0.01)
         assert r["km_per_month"] == {"2026-03": 10.0, "2026-04": 25.0}
-        assert r["max_top_speed"] == 222.24
-        assert r["avg_top_speed"] == 185.2
+        assert r["max_top_speed"] == 120
+        assert r["avg_top_speed"] == 100.0
 
-    def test_left_lean_is_not_beaten_by_any_right_lean(self):
-        """Raw values would rank a 10° right lean (100) above a 50° left lean (40)."""
+    def test_left_lean_is_not_beaten_by_a_smaller_right_lean(self):
         r = stats.summarize([
-            _trip(maxAngle=40.0, maxLeftAngle=40.0, maxRightAngle=95.0),
-            _trip(maxAngle=100.0, maxLeftAngle=85.0, maxRightAngle=100.0),
+            _trip(maxLeanAngle=-50.0, maxLeftAngle=50.0, maxRightAngle=5.0),
+            _trip(maxLeanAngle=10.0, maxLeftAngle=5.0, maxRightAngle=10.0),
         ])
         assert r["max_lean_angle"] == 50.0
         assert r["max_left_lean_angle"] == 50.0

@@ -3,31 +3,32 @@
     "step": {
       "user": {
         "title": "GeoRide",
-        "description": "Sign in with your GeoRide account.",
+        "description": "Sign in with your GeoRide account. A one-time code will be emailed to you.",
         "data": {
-          "email": "Email",
-          "password": "Password"
+          "email": "Email"
         }
       },
       "reauth_confirm": {
         "title": "GeoRide — re-authentication required",
-        "description": "Your GeoRide token expired. Re-enter the password for {email}.",
-        "data": {
-          "password": "Password"
-        }
+        "description": "Your GeoRide session expired (or still uses the old API). Submit to email a new login code to {email}."
       },
       "reconfigure": {
         "title": "GeoRide — reconfigure",
-        "description": "Refresh the GeoRide token for {email} by re-entering the password.",
+        "description": "Submit to email a new login code to {email} and refresh the session."
+      },
+      "otp": {
+        "title": "GeoRide — enter the code",
+        "description": "Enter the code GeoRide just emailed to {email}.",
         "data": {
-          "password": "Password"
+          "otp": "Code"
         }
       }
     },
     "error": {
       "invalid_auth": "Invalid authentication",
       "cannot_connect": "Failed to connect",
-      "unknown": "Unexpected error"
+      "unknown": "Unexpected error",
+      "invalid_code": "Invalid or expired code"
     },
     "abort": {
       "already_configured": "This account is already configured",

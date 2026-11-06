@@ -3,31 +3,32 @@
     "step": {
       "user": {
         "title": "GeoRide",
-        "description": "Melde dich mit deinem GeoRide-Konto an.",
+        "description": "Melde dich mit deinem GeoRide-Konto an. Du erhältst einen Einmalcode per E-Mail.",
         "data": {
-          "email": "E-Mail",
-          "password": "Passwort"
+          "email": "E-Mail"
         }
       },
       "reauth_confirm": {
         "title": "GeoRide — erneute Anmeldung erforderlich",
-        "description": "Das GeoRide-Token ist abgelaufen. Bitte gib das Passwort für {email} erneut ein.",
-        "data": {
-          "password": "Passwort"
-        }
+        "description": "Deine GeoRide-Sitzung ist abgelaufen (oder nutzt noch die alte API). Bestätige, um einen neuen Code an {email} zu senden."
       },
       "reconfigure": {
         "title": "GeoRide — neu konfigurieren",
-        "description": "Aktualisiere das GeoRide-Token für {email}, indem du das Passwort erneut eingibst.",
+        "description": "Bestätige, um einen neuen Code an {email} zu senden und die Sitzung zu erneuern."
+      },
+      "otp": {
+        "title": "GeoRide — Code eingeben",
+        "description": "Gib den Code ein, den GeoRide gerade an {email} gesendet hat.",
         "data": {
-          "password": "Passwort"
+          "otp": "Code"
         }
       }
     },
     "error": {
       "invalid_auth": "Ungültige Anmeldedaten",
       "cannot_connect": "Verbindung fehlgeschlagen",
-      "unknown": "Unerwarteter Fehler"
+      "unknown": "Unerwarteter Fehler",
+      "invalid_code": "Ungültiger oder abgelaufener Code"
     },
     "abort": {
       "already_configured": "Dieses Konto ist bereits konfiguriert",

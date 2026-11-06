@@ -78,7 +78,6 @@ if not _HA_NATIVE:
     _load("helpers")
     _load("stats")
     _load("api")
-    _load("socket_client")
 
     # `patch("custom_components.georide.X")` needs to traverse the parent
     # module's attributes — make sure the shim exposes them that way too.
@@ -112,28 +111,24 @@ _load_secrets_file_into_env()
 # 4. Fixtures for live API tests
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
-def georide_credentials() -> tuple[str, str]:
-    email = os.environ.get("GEORIDE_EMAIL")
-    password = os.environ.get("GEORIDE_PASSWORD")
-    if not email or not password:
-        pytest.skip(
-            "GEORIDE_EMAIL / GEORIDE_PASSWORD not set "
-            "(env vars or tests/secrets.local.env)"
-        )
-    return email, password
+def georide_session() -> str:
+    """Session cookie value (log in once by code, e.g. with the HA config flow)."""
+    session = os.environ.get("GEORIDE_SESSION")
+    if not session:
+        pytest.skip("GEORIDE_SESSION not set (env var or tests/secrets.local.env)")
+    return session
 
 
 @pytest_asyncio.fixture
 async def aiohttp_session():
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(cookie_jar=aiohttp.DummyCookieJar()) as session:
         yield session
 
 
 @pytest_asyncio.fixture
-async def authed_client(aiohttp_session, georide_credentials):
-    email, password = georide_credentials
-    client = GeoRideApiClient(aiohttp_session)
-    await client.login(email, password)
+async def authed_client(aiohttp_session, georide_session):
+    client = GeoRideApiClient(aiohttp_session, token=georide_session)
+    await client.get_trackers()  # fills the tracker id map
     return client
 
 

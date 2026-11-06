@@ -3,31 +3,32 @@
     "step": {
       "user": {
         "title": "GeoRide",
-        "description": "Meld je aan met je GeoRide-account.",
+        "description": "Log in met je GeoRide-account. Je ontvangt een eenmalige code per e-mail.",
         "data": {
-          "email": "E-mail",
-          "password": "Wachtwoord"
+          "email": "E-mail"
         }
       },
       "reauth_confirm": {
-        "title": "GeoRide — nieuwe aanmelding vereist",
-        "description": "Het GeoRide-token is verlopen. Voer het wachtwoord voor {email} opnieuw in.",
-        "data": {
-          "password": "Wachtwoord"
-        }
+        "title": "GeoRide — opnieuw aanmelden vereist",
+        "description": "Je GeoRide-sessie is verlopen (of gebruikt nog de oude API). Bevestig om een nieuwe code naar {email} te sturen."
       },
       "reconfigure": {
-        "title": "GeoRide — herconfigureren",
-        "description": "Ververs het GeoRide-token voor {email} door het wachtwoord opnieuw in te voeren.",
+        "title": "GeoRide — opnieuw configureren",
+        "description": "Bevestig om een nieuwe code naar {email} te sturen en de sessie te vernieuwen."
+      },
+      "otp": {
+        "title": "GeoRide — code invoeren",
+        "description": "Voer de code in die GeoRide zojuist naar {email} heeft gestuurd.",
         "data": {
-          "password": "Wachtwoord"
+          "otp": "Code"
         }
       }
     },
     "error": {
       "invalid_auth": "Ongeldige inloggegevens",
       "cannot_connect": "Verbinding mislukt",
-      "unknown": "Onverwachte fout"
+      "unknown": "Onverwachte fout",
+      "invalid_code": "Ongeldige of verlopen code"
     },
     "abort": {
       "already_configured": "Dit account is al geconfigureerd",

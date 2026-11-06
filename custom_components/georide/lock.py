@@ -22,7 +22,11 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the lock entity for every tracker that supports remote lock."""
+    """Set up the lock for trackers with a manual lock (GeoRide 1).
+
+    GeoRide 3 trackers lock themselves through badge / phone recognition and
+    answer TRACKER_FEATURE_NOT_SUPPORTED, so `canLock` is False for them.
+    """
     coordinator: GeoRideCoordinator = entry.runtime_data
     known: set[int] = set()
 
@@ -32,7 +36,7 @@ async def async_setup_entry(
         for tracker_id, tracker in coordinator.data.items():
             if tracker_id in known:
                 continue
-            if not (tracker.get("canLock", True) or tracker.get("canUnlock", True)):
+            if not (tracker.get("canLock") or tracker.get("canUnlock")):
                 continue
             known.add(tracker_id)
             new.append(GeoRideLock(coordinator, tracker_id))

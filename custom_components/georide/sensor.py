@@ -40,8 +40,6 @@ from homeassistant.helpers.typing import StateType
 from .coordinator import GeoRideCoordinator
 from .entity import GeoRideBeaconEntity, GeoRideEntity
 from .helpers import (
-    knots_to_kmh as _knots_to_kmh,
-    lean_angle_deg as _lean_angle_deg,
     meters_to_km as _meters_to_km,
     number as _number,
     parse_timestamp as _parse_timestamp,
@@ -74,7 +72,7 @@ SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.SPEED,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
-        value_fn=lambda d: _knots_to_kmh(d.get("speed")),
+        value_fn=lambda d: _number(d.get("speed")),
     ),
     GeoRideSensorEntityDescription(
         key="battery_level",
@@ -129,10 +127,25 @@ SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
 )
 
 
-def _ms_to_s(value: Any) -> int | None:
+def _seconds(value: Any) -> int | None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
-    return round(float(value) / 1000.0)
+    return round(float(value))
+
+
+def _kmh(value: Any) -> float | None:
+    v = _number(value)
+    return None if v is None else round(float(v), 2)
+
+
+def _max_lean(trip: dict[str, Any]) -> float | None:
+    """Largest lean of the trip in degrees, from either side."""
+    sides = [_number(trip.get(k)) for k in ("maxLeftAngle", "maxRightAngle")]
+    known = [abs(float(v)) for v in sides if v is not None]
+    if known:
+        return round(max(known), 2)
+    raw = _number(trip.get("maxLeanAngle"))
+    return None if raw is None else round(abs(float(raw)), 2)
 
 
 def _duration_attrs(trip: dict[str, Any]) -> dict[str, Any]:
@@ -141,7 +154,7 @@ def _duration_attrs(trip: dict[str, Any]) -> dict[str, Any]:
     Kept as attributes so the numeric `native_value` (seconds, DURATION class)
     still works for HA stats, while the card / dashboard can show "1h 23m 45s".
     """
-    total = _ms_to_s(trip.get("duration"))
+    total = _seconds(trip.get("duration"))
     if total is None:
         return {}
     hours, rem = divmod(total, 3600)
@@ -161,29 +174,21 @@ def _duration_attrs(trip: dict[str, Any]) -> dict[str, Any]:
 
 
 def _lean_attrs(trip: dict[str, Any]) -> dict[str, Any]:
-    """Expose left/right lean and the side of the max lean.
-
-    `maxAngle` itself is converted to lean-from-vertical in the sensor's
-    native_value. Here we also surface each side independently and tag the
-    direction the bike was leaning at its peak.
-    """
-    raw = trip.get("maxAngle")
+    """Expose left/right lean (degrees) and the side of the max lean."""
     out: dict[str, Any] = {}
-    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
-        if raw > 90:
-            out["side"] = "right"
-        elif raw < 90:
-            out["side"] = "left"
-    left = _lean_angle_deg(trip.get("maxLeftAngle"))
+    left = _number(trip.get("maxLeftAngle"))
+    right = _number(trip.get("maxRightAngle"))
     if left is not None:
-        out["max_left"] = left
-    right = _lean_angle_deg(trip.get("maxRightAngle"))
+        out["max_left"] = round(float(left), 2)
     if right is not None:
-        out["max_right"] = right
-    # averageAngle is intentionally omitted: it doesn't follow the same
-    # 90°-offset frame as maxAngle (a value of 15.23 reads as a sensible
-    # ~15° average lean, but |15.23-90| = 74.77° is nonsensical). Without
-    # confirmation of its frame, exposing it would mislead.
+        out["max_right"] = round(float(right), 2)
+    if left is not None and right is not None:
+        out["side"] = "left" if left > right else "right"
+    else:
+        # The trip itself only carries a signed angle: negative = left.
+        raw = _number(trip.get("maxLeanAngle"))
+        if raw:
+            out["side"] = "left" if raw < 0 else "right"
     return out
 
 
@@ -207,7 +212,7 @@ LAST_TRIP_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         translation_key="last_trip_duration",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        value_fn=lambda d: _ms_to_s(d.get("duration")),
+        value_fn=lambda d: _seconds(d.get("duration")),
         attrs_fn=_duration_attrs,
     ),
     GeoRideSensorEntityDescription(
@@ -216,7 +221,7 @@ LAST_TRIP_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.SPEED,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
-        value_fn=lambda d: _knots_to_kmh(d.get("averageSpeed")),
+        value_fn=lambda d: _kmh(d.get("averageSpeed")),
     ),
     GeoRideSensorEntityDescription(
         key="last_trip_max_speed",
@@ -224,14 +229,14 @@ LAST_TRIP_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.SPEED,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
-        value_fn=lambda d: _knots_to_kmh(d.get("maxSpeed")),
+        value_fn=lambda d: _kmh(d.get("maxSpeed")),
     ),
     GeoRideSensorEntityDescription(
         key="last_trip_max_lean_angle",
         translation_key="last_trip_max_lean_angle",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=DEGREE,
-        value_fn=lambda d: _lean_angle_deg(d.get("maxAngle")),
+        value_fn=_max_lean,
         attrs_fn=_lean_attrs,
     ),
 )
@@ -267,14 +272,14 @@ async def async_setup_entry(
     GeoRide app) get their entities created without an HA restart.
     """
     coordinator: GeoRideCoordinator = entry.runtime_data
-    known: set[tuple[str, int, str]] = set()
+    known: set[tuple[str, int | str, str]] = set()
 
     @callback
     def _async_add_new() -> None:
         new: list[SensorEntity] = []
         for tracker_id in coordinator.data:
             for desc in SENSORS:
-                key = ("tracker", tracker_id, desc.key)
+                key: tuple[str, int | str, str] = ("tracker", tracker_id, desc.key)
                 if key in known:
                     continue
                 known.add(key)
@@ -288,7 +293,7 @@ async def async_setup_entry(
         for tracker_id, items in coordinator.maintenance.items():
             for item in items:
                 item_id = item.get("id")
-                if not isinstance(item_id, int):
+                if not isinstance(item_id, (int, str)):
                     continue
                 key = ("maintenance", tracker_id, str(item_id))
                 if key in known:
@@ -300,7 +305,7 @@ async def async_setup_entry(
         for tracker_id, beacons in coordinator.beacons.items():
             for beacon in beacons:
                 beacon_id = beacon.get("id")
-                if not isinstance(beacon_id, int):
+                if not isinstance(beacon_id, (int, str)):
                     continue
                 for desc in BEACON_SENSORS:
                     key = ("beacon", beacon_id, desc.key)
@@ -333,6 +338,12 @@ class GeoRideSensor(GeoRideEntity, SensorEntity):
     @property
     def native_value(self) -> StateType | datetime:
         return self.entity_description.value_fn(self._tracker)
+
+    @property
+    def available(self) -> bool:
+        # The v2 API dropped some fields (speed, altitude, internal voltage):
+        # no value means the data source is gone, not a transient unknown.
+        return super().available and self.native_value is not None
 
 
 class GeoRideLastTripSensor(GeoRideEntity, SensorEntity):
@@ -380,7 +391,7 @@ class GeoRideMaintenanceSensor(GeoRideEntity, SensorEntity):
         self,
         coordinator: GeoRideCoordinator,
         tracker_id: int,
-        item_id: int,
+        item_id: int | str,
     ) -> None:
         super().__init__(coordinator, tracker_id)
         self._item_id = item_id
@@ -442,7 +453,7 @@ class GeoRideBeaconSensor(GeoRideBeaconEntity, SensorEntity):
         self,
         coordinator: GeoRideCoordinator,
         tracker_id: int,
-        beacon_id: int,
+        beacon_id: int | str,
         description: GeoRideSensorEntityDescription,
     ) -> None:
         super().__init__(coordinator, tracker_id, beacon_id)

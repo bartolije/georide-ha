@@ -1,14 +1,14 @@
-"""Live API tests against api.georide.com.
+"""Live API tests against api-v2.georide.com.
 
-These tests are gated behind credentials. They will be SKIPPED automatically
-if `GEORIDE_EMAIL` / `GEORIDE_PASSWORD` are not provided (env or
-tests/secrets.local.env). When they run, they:
+These tests are gated behind a session. They will be SKIPPED automatically
+if `GEORIDE_SESSION` is not provided (env or tests/secrets.local.env).
+When they run, they:
 
-  - actually log in to the real account,
+  - use the real account's session cookie (read-only calls),
   - actually hit the GeoRide REST API,
   - print discovered payload keys so the integration can be typed safely.
 
-Never print the token, password, or full payload bodies.
+Never print the session cookie or full payload bodies.
 """
 from __future__ import annotations
 
@@ -20,18 +20,6 @@ from georide.api import GeoRideApiClient
 
 
 pytestmark = pytest.mark.live
-
-
-async def test_login_returns_non_empty_token(
-    aiohttp_session, georide_credentials
-) -> None:
-    email, password = georide_credentials
-    client = GeoRideApiClient(aiohttp_session)
-    token = await client.login(email, password)
-    assert isinstance(token, str)
-    assert len(token) > 16, "Token suspiciously short"
-    # Do not print the token. Just confirm length and that the client cached it.
-    assert client.token == token
 
 
 async def test_get_trackers_returns_list(authed_client: GeoRideApiClient) -> None:

@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import logging
 
+import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_TOKEN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api import GeoRideApiClient
@@ -32,20 +34,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up GeoRide from a config entry: build the coordinator, fan out platforms."""
-    session = async_get_clientsession(hass)
+    # Own session without cookie jar: the session cookie is sent explicitly,
+    # so two GeoRide accounts can't leak into each other through a shared jar.
+    session = async_create_clientsession(hass, cookie_jar=aiohttp.DummyCookieJar())
     client = GeoRideApiClient(session, token=entry.data[CONF_TOKEN])
     coordinator = GeoRideCoordinator(hass, entry, client)
 
     # First refresh: raises ConfigEntryAuthFailed (→ reauth) or
-    # ConfigEntryNotReady (→ retry) on its own when needed.
+    # ConfigEntryNotReady (→ retry) on its own when needed. Entries created
+    # before the v2 API hold a v1 token, which v2 rejects → reauth by code.
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
-
-    # Open the realtime socket. Best-effort: a failure here only means we
-    # rely on REST polling, which is already wired and tested.
-    await coordinator.async_start_socket(entry.data[CONF_TOKEN])
-    entry.async_on_unload(coordinator.async_stop_socket)
 
     _cleanup_stale_devices(
         hass,
@@ -55,9 +55,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             b["id"]
             for beacons in coordinator.beacons.values()
             for b in beacons
-            if isinstance(b.get("id"), int)
+            if isinstance(b.get("id"), (int, str))
         },
     )
+    _cleanup_stale_maintenance(hass, entry, coordinator)
 
     _LOGGER.info(
         "GeoRide: setup complete for %s with %d tracker(s)",
@@ -79,7 +80,7 @@ def _cleanup_stale_devices(
     entry: ConfigEntry,
     *,
     tracker_ids: set[int],
-    beacon_ids: set[int],
+    beacon_ids: set[int | str],
 ) -> None:
     """Drop devices whose tracker_id or beacon_id is no longer in GeoRide.
 
@@ -102,3 +103,26 @@ def _cleanup_stale_devices(
             device_registry.async_update_device(
                 device.id, remove_config_entry_id=entry.entry_id
             )
+
+
+def _cleanup_stale_maintenance(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: GeoRideCoordinator
+) -> None:
+    """Drop maintenance entities whose item no longer exists.
+
+    The v2 API renumbered maintenance items (`maintenance_…` instead of an
+    int), so removing the old registry entries before the platforms run lets
+    the new entities take over the same entity_ids, and their history.
+    """
+    current = {
+        f"{tid}-maintenance-{item.get('id')}"
+        for tid, items in coordinator.maintenance.items()
+        for item in items
+    }
+    fetched = {str(tid) for tid in coordinator.maintenance}
+    registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+        tid, sep, _ = entity.unique_id.partition("-maintenance-")
+        if sep and tid in fetched and entity.unique_id not in current:
+            _LOGGER.info("Removing stale GeoRide maintenance entity %s", entity.entity_id)
+            registry.async_remove(entity.entity_id)

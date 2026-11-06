@@ -10,11 +10,11 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
-from .helpers import knots_to_kmh, lean_angle_deg
+from .helpers import number
 
 DISTANCE_KEYS = ("distance", "tripDistance", "tripKm", "kmDistance")
 MAX_SPEED_KEYS = ("maxSpeed", "topSpeed", "speedMax")
-MAX_ANGLE_KEYS = ("maxAngle", "leanAngle", "maxLeanAngle", "angleMax")
+MAX_ANGLE_KEYS = ("maxLeanAngle", "maxAngle", "leanAngle", "angleMax")
 MAX_LEFT_ANGLE_KEYS = ("maxLeftAngle",)
 MAX_RIGHT_ANGLE_KEYS = ("maxRightAngle",)
 START_TIME_KEYS = ("startTime", "start_time", "startDate", "startedAt", "start")
@@ -93,19 +93,22 @@ def summarize(trips: list[dict[str, Any]]) -> dict[str, Any]:
             if month is not None:
                 km_per_month[month] += km
 
-        # GeoRide reports speeds in knots, like the live sensors convert.
-        top_speed = knots_to_kmh(pick(trip, MAX_SPEED_KEYS))
+        # The v2 API reports speeds in km/h.
+        top_speed = _kmh(pick(trip, MAX_SPEED_KEYS))
         if top_speed is not None:
             speeds.append(top_speed)
             max_top_speed = (
                 top_speed if max_top_speed is None else max(max_top_speed, top_speed)
             )
 
-        # Angles are offsets from a 90° vertical: compare the lean itself, or
-        # a left lean (raw below 90) would always lose to any right lean.
-        max_angle = _max_or(max_angle, lean_angle_deg(pick(trip, MAX_ANGLE_KEYS)))
-        max_left = _max_or(max_left, lean_angle_deg(pick(trip, MAX_LEFT_ANGLE_KEYS)))
-        max_right = _max_or(max_right, lean_angle_deg(pick(trip, MAX_RIGHT_ANGLE_KEYS)))
+        # Angles are degrees from vertical; the trip-level one is signed
+        # (negative = left), so compare magnitudes.
+        left = _deg(pick(trip, MAX_LEFT_ANGLE_KEYS))
+        right = _deg(pick(trip, MAX_RIGHT_ANGLE_KEYS))
+        max_left = _max_or(max_left, left)
+        max_right = _max_or(max_right, right)
+        max_angle = _max_or(max_angle, _deg(pick(trip, MAX_ANGLE_KEYS)))
+        max_angle = _max_or(_max_or(max_angle, left), right)
 
     return {
         "trips_count": len(trips),
@@ -125,3 +128,13 @@ def _max_or(current: float | None, value: float | None) -> float | None:
     if value is None:
         return current
     return value if current is None else max(current, value)
+
+
+def _kmh(value: Any) -> float | None:
+    v = number(value)
+    return None if v is None else round(float(v), 2)
+
+
+def _deg(value: Any) -> float | None:
+    v = number(value)
+    return None if v is None else round(abs(float(v)), 2)

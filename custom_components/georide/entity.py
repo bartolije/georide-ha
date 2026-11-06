@@ -49,7 +49,7 @@ class GeoRideBeaconEntity(CoordinatorEntity[GeoRideCoordinator]):
         self,
         coordinator: GeoRideCoordinator,
         tracker_id: int,
-        beacon_id: int,
+        beacon_id: int | str,
     ) -> None:
         super().__init__(coordinator)
         self._tracker_id = tracker_id

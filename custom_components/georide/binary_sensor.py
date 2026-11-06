@@ -86,14 +86,14 @@ async def async_setup_entry(
 ) -> None:
     """Set up tracker + beacon binary sensors, picking up newcomers on the fly."""
     coordinator: GeoRideCoordinator = entry.runtime_data
-    known: set[tuple[str, int, str]] = set()
+    known: set[tuple[str, int | str, str]] = set()
 
     @callback
     def _async_add_new() -> None:
         new: list[BinarySensorEntity] = []
         for tracker_id in coordinator.data:
             for desc in BINARY_SENSORS:
-                key = ("tracker", tracker_id, desc.key)
+                key: tuple[str, int | str, str] = ("tracker", tracker_id, desc.key)
                 if key in known:
                     continue
                 known.add(key)
@@ -101,7 +101,7 @@ async def async_setup_entry(
         for tracker_id, beacons in coordinator.beacons.items():
             for beacon in beacons:
                 beacon_id = beacon.get("id")
-                if not isinstance(beacon_id, int):
+                if not isinstance(beacon_id, (int, str)):
                     continue
                 for desc in BEACON_BINARY_SENSORS:
                     key = ("beacon", beacon_id, desc.key)
@@ -145,7 +145,7 @@ class GeoRideBeaconBinarySensor(GeoRideBeaconEntity, BinarySensorEntity):
         self,
         coordinator: GeoRideCoordinator,
         tracker_id: int,
-        beacon_id: int,
+        beacon_id: int | str,
         description: GeoRideBinarySensorEntityDescription,
     ) -> None:
         super().__init__(coordinator, tracker_id, beacon_id)

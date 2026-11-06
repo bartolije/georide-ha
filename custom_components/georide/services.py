@@ -95,7 +95,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 matched = True
 
                 try:
-                    trips = await client.get_trips(tid, from_iso, to_iso)
+                    trips = await client.get_trips(tid, from_iso, to_iso, metrics=True)
                 except GeoRideAuthError as err:
                     raise HomeAssistantError(
                         translation_domain=DOMAIN,

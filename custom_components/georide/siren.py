@@ -25,15 +25,17 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up one siren per tracker, including those added after setup."""
+    """Set up a siren for every tracker with a Live Alarm, including later ones."""
     coordinator: GeoRideCoordinator = entry.runtime_data
     known: set[int] = set()
 
     @callback
     def _async_add_new() -> None:
         new = []
-        for tracker_id in coordinator.data:
+        for tracker_id, tracker in coordinator.data.items():
             if tracker_id in known:
+                continue
+            if "accessory/live-alarm" not in (tracker.get("capabilities") or []):
                 continue
             known.add(tracker_id)
             new.append(GeoRideSiren(coordinator, tracker_id))
@@ -45,16 +47,14 @@ async def async_setup_entry(
 
 
 class GeoRideSiren(GeoRideEntity, SirenEntity):
-    """The tracker's sonor alarm.
+    """The Live Alarm siren.
 
-    GeoRide's API exposes turn-on / turn-off but not a read-back state for the
-    siren, so `is_on` is reported as None (unknown). The integration trusts the
-    last command issued from Home Assistant.
+    GeoRide v2 only offers a trigger: the siren rings for the duration set in
+    the app and stops on its own, so there is no turn-off and no read-back
+    state (`is_on` is None).
     """
 
-    _attr_supported_features = (
-        SirenEntityFeature.TURN_ON | SirenEntityFeature.TURN_OFF
-    )
+    _attr_supported_features = SirenEntityFeature.TURN_ON
     _attr_name = "Siren"
     _attr_translation_key = "siren"
 
@@ -68,9 +68,6 @@ class GeoRideSiren(GeoRideEntity, SirenEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._call(self.coordinator.client.siren_on)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        await self._call(self.coordinator.client.siren_off)
 
     async def _call(self, fn: Any) -> None:
         try:

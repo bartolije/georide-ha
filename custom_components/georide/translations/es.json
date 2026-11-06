@@ -3,31 +3,32 @@
     "step": {
       "user": {
         "title": "GeoRide",
-        "description": "Inicia sesión con tu cuenta de GeoRide.",
+        "description": "Inicia sesión con tu cuenta GeoRide. Recibirás un código de un solo uso por correo.",
         "data": {
-          "email": "Correo electrónico",
-          "password": "Contraseña"
+          "email": "Correo electrónico"
         }
       },
       "reauth_confirm": {
-        "title": "GeoRide — se requiere autenticación",
-        "description": "El token de GeoRide ha caducado. Vuelve a introducir la contraseña de {email}.",
-        "data": {
-          "password": "Contraseña"
-        }
+        "title": "GeoRide — se requiere volver a autenticarse",
+        "description": "Tu sesión de GeoRide ha caducado (o aún usa la API antigua). Confirma para enviar un nuevo código a {email}."
       },
       "reconfigure": {
         "title": "GeoRide — reconfigurar",
-        "description": "Actualiza el token de GeoRide para {email} introduciendo de nuevo la contraseña.",
+        "description": "Confirma para enviar un nuevo código a {email} y renovar la sesión."
+      },
+      "otp": {
+        "title": "GeoRide — introduce el código",
+        "description": "Introduce el código que GeoRide acaba de enviar a {email}.",
         "data": {
-          "password": "Contraseña"
+          "otp": "Código"
         }
       }
     },
     "error": {
       "invalid_auth": "Credenciales no válidas",
       "cannot_connect": "No se pudo conectar",
-      "unknown": "Error inesperado"
+      "unknown": "Error inesperado",
+      "invalid_code": "Código no válido o caducado"
     },
     "abort": {
       "already_configured": "Esta cuenta ya está configurada",

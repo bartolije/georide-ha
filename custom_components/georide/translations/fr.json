@@ -3,31 +3,32 @@
     "step": {
       "user": {
         "title": "GeoRide",
-        "description": "Connectez-vous à votre compte GeoRide.",
+        "description": "Connectez-vous avec votre compte GeoRide. Un code à usage unique vous sera envoyé par e-mail.",
         "data": {
-          "email": "Adresse e-mail",
-          "password": "Mot de passe"
+          "email": "E-mail"
         }
       },
       "reauth_confirm": {
-        "title": "GeoRide — ré-authentification requise",
-        "description": "Le jeton GeoRide a expiré. Saisissez à nouveau le mot de passe de {email}.",
-        "data": {
-          "password": "Mot de passe"
-        }
+        "title": "GeoRide — nouvelle authentification requise",
+        "description": "Votre session GeoRide a expiré (ou utilise encore l'ancienne API). Validez pour recevoir un nouveau code à {email}."
       },
       "reconfigure": {
-        "title": "GeoRide — reconfiguration",
-        "description": "Rafraîchissez le jeton GeoRide pour {email} en saisissant à nouveau votre mot de passe.",
+        "title": "GeoRide — reconfigurer",
+        "description": "Validez pour recevoir un nouveau code à {email} et renouveler la session."
+      },
+      "otp": {
+        "title": "GeoRide — saisir le code",
+        "description": "Saisissez le code que GeoRide vient d'envoyer à {email}.",
         "data": {
-          "password": "Mot de passe"
+          "otp": "Code"
         }
       }
     },
     "error": {
       "invalid_auth": "Identifiants incorrects",
       "cannot_connect": "Connexion impossible",
-      "unknown": "Erreur inattendue"
+      "unknown": "Erreur inattendue",
+      "invalid_code": "Code invalide ou expiré"
     },
     "abort": {
       "already_configured": "Ce compte est déjà configuré",

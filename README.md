@@ -11,8 +11,9 @@
 Unofficial Home Assistant integration for [GeoRide](https://georide.fr)
 motorcycle GPS trackers. Brings every tracker on your account into
 Home Assistant as a device with live position, lock control, alarm
-events, last-trip stats and per-item maintenance counters. Realtime
-socket.io stream for instant push, REST polling as fallback.
+events, last-trip stats and per-item maintenance counters. Talks to the
+GeoRide v2 API (`api-v2.georide.com`, the one the app uses since 5.5),
+polled every 60 s.
 
 ---
 
@@ -24,10 +25,11 @@ intégration **non-officielle** branche ton compte GeoRide à Home
 Assistant pour que ta moto y apparaisse comme un appareil avec :
 
 - 📍 sa **position en direct** sur la carte
-- 🔒 un bouton **verrouiller / déverrouiller** à distance
-- 🚨 une **sirène** déclenchable + des événements HA quand l'alarme se
-  déclenche (vibration, choc, sortie de zone…)
-- 🔋 sa **batterie en %**, sa **vitesse**, son **compteur kilométrique**,
+- 🔒 un bouton **verrouiller / déverrouiller** à distance (GeoRide 1 ; le
+  GeoRide 3 se verrouille seul avec le badge ou le téléphone)
+- 🚨 la **sirène Live Alarm** déclenchable + des événements HA quand
+  l'alarme se déclenche (vibration, mouvement…), avec 1 min de délai
+- 🔋 sa **batterie en %**, son **compteur kilométrique**,
   son **dernier trajet** (distance, durée, vitesse max, angle max à gauche et à droite)
 - 🛠️ un **capteur diagnostique par item de maintenance** que tu as
   configuré dans l'app GeoRide (vidange, chaîne, pneus…)
@@ -76,19 +78,17 @@ GeoRide*.
 
 ## Configuration
 
-The integration is configured through the UI. You will be asked for
-your GeoRide account email and password. Only the resulting bearer
-token is persisted — the password is never stored.
+The integration is configured through the UI. Like the GeoRide app,
+it logs in without a password: enter your account email, GeoRide
+emails you a one-time code, type it in. Only the resulting session is
+persisted.
 
-GeoRide tokens expire 30 days after they are minted. The integration
-renews its token automatically once a week (via `/user/new-token`), so
-you should never see a reauth prompt in normal operation — only if
-Home Assistant stays offline long enough for the token to die (30+
-days), if you change your GeoRide password, or if the account is
-locked. In those cases Home Assistant raises a reauth notification.
-The same flow is reachable manually via *Settings → Devices &
-Services → GeoRide → Configure* (a fresh login mints a new token
-without recreating the entry).
+GeoRide sessions last 90 days. When one expires (or after upgrading
+from a version that used the old API, whose token the v2 API rejects),
+Home Assistant raises a reauth notification: confirm, and type the new
+code GeoRide emails you. The same flow is reachable manually via
+*Settings → Devices & Services → GeoRide → Configure*, without
+recreating the entry.
 
 ## What this integration exposes
 
@@ -98,17 +98,17 @@ with the following entities.
 | Platform | Entity | What it shows |
 |---|---|---|
 | `device_tracker` | (tracker name) | Live GPS position; renders on the Lovelace map. |
-| `lock` | (tracker name) | Lock / unlock the GeoRide remotely. Follows `isLocked`. |
-| `siren` | Siren | Trigger or stop the sonor alarm. Write-only. |
-| `switch` | Eco mode | Toggle eco mode (slower fixes, longer battery). |
+| `lock` | (tracker name) | Manual lock of GeoRide 1 trackers only (GeoRide 3 locks itself with the badge / phone, so no entity). |
+| `siren` | Siren | Rings the Live Alarm for the duration set in the app. Created only when the tracker has a Live Alarm. Turn-on only. |
+| `switch` | Eco mode | Toggle eco mode ("bike without battery" in the app). Applied at the tracker's next connection, which can take hours while it sleeps. |
 | `sensor` | Odometer | Cumulative kilometres ridden. |
-| `sensor` | Speed | Instant speed (km/h). |
+| `sensor` | Speed | Unavailable: the v2 API no longer reports instant speed. |
 | `sensor` | Battery | Moto battery % computed from external voltage. |
 | `sensor` | Last seen | Timestamp of the latest GPS fix. |
 | `sensor` | Last trip end / distance / duration / avg speed / top speed | Stats of the most recent ride (refreshed every 5 min). The last ride stays displayed until a new one is recorded, even after a long break or a restart (up to one year back). |
 | `sensor` | Last trip max lean angle | Disabled by default. Lean from vertical in degrees; attributes `max_left`, `max_right` and `side`. |
-| `sensor` | Altitude | Diagnostic, disabled by default. |
-| `sensor` | External / internal battery voltage | Diagnostic. |
+| `sensor` | Altitude | Diagnostic, disabled by default. Unavailable with the v2 API. |
+| `sensor` | External / internal battery voltage | Diagnostic. Internal voltage is unavailable with the v2 API (it reports a percentage). |
 | `sensor` | Subscription expires | Diagnostic, disabled by default. |
 | `sensor` | (per maintenance item) | One diagnostic sensor per item you configured in the GeoRide app. Auto-detects km vs days. |
 | `binary_sensor` | Moving | `DeviceClass.MOVING`. |
@@ -137,20 +137,13 @@ address is attached as a HA connection.
 
 ## Data updates
 
-Two channels in parallel:
-
-- **Realtime socket.io** (`socket.georide.com`) — position, lock state
-  and alarms pushed within seconds. Reconnections handled
-  automatically.
-- **REST polling every 60 s** (`api.georide.com`) — source of truth.
-  Keeps entities fresh even if the realtime socket is down. Trips
-  refreshed every 5 min, maintenance items every 15 min.
-
-If the realtime socket fails, the integration logs a warning and keeps
-running on polling alone.
-
-The bearer token is renewed once a week as part of the update cycle;
-the realtime socket picks the new token up on its next reconnection.
+REST polling every 60 s against `api-v2.georide.com` (vehicle,
+tracker, battery, mode, subscription and the latest tracker events).
+Trips are refreshed every 5 min, maintenance items and badges every
+15 min. The v2 API has no realtime channel (the GeoRide app no longer
+opens the old socket.io stream), so alarms reach Home Assistant within
+about a minute. "Moving" is inferred from the age of the last GPS fix
+(under 5 min).
 
 ## Services
 
@@ -206,13 +199,13 @@ adds the raw trip list so a Lovelace card can render them on a map.
 ## Events
 
 The coordinator fires Home Assistant events on state transitions and
-on realtime alarms. Useful for event-driven automations.
+on new tracker events. Useful for event-driven automations.
 
 | Event | `event_data` keys | Fired when |
 |---|---|---|
 | `georide_lock_event` | `device_id`, `tracker_id`, `tracker_name`, `is_locked` | `isLocked` flips. |
 | `georide_moving_event` | `device_id`, `tracker_id`, `tracker_name`, `moving` | `moving` flips. |
-| `georide_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type`, optionally `source` and `raw` | Stolen / crashed / theft case opened via polling, plus the granular realtime types (`vibration`, `exitZone`, `crashParking`, `powerCut`, `magnetOn`, `batteryWarning`, …). |
+| `georide_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type`, `occurred_at`, `source` | Each new tracker event, `type` being the GeoRide kind without its `event/` prefix: `vibration/detected`, `movement/detected`, `displacement/detected`, `power/restored`, … (types changed with the v2 API). |
 
 ## Automation examples
 
@@ -297,8 +290,8 @@ you bring your own. Without it, the card falls back to a text header.
   curves are non-linear; treat as an estimate.
 - **Siren state is write-only.** GeoRide's API does not report siren
   state back; the integration shows it as unknown.
-- **2FA accounts not supported yet.** If your GeoRide account uses
-  2FA, the config flow will fail.
+- **No instant speed, altitude, stolen or crashed flag** with the v2
+  API: those entities stay unavailable.
 - **Custom integration**: not in core HA. Updates ship through HACS.
 
 ## Troubleshooting
@@ -313,11 +306,12 @@ logger:
 ```
 
 For a full snapshot, *Settings → Devices & Services → GeoRide → ⋮ →
-Download diagnostics*. The bearer token, lat/lon and email are
+Download diagnostics*. The session, lat/lon and email are
 redacted automatically.
 
-If the integration shows as red after install: most often a stale
-token. Re-authenticate via the prompt or *Configure → enter password*.
+If the integration shows as red after install: most often an expired
+session. Re-authenticate via the prompt or *Configure* (a new code is
+emailed).
 
 ## Removal
 
@@ -325,9 +319,8 @@ token. Re-authenticate via the prompt or *Configure → enter password*.
    device, entity and the entry itself are removed.
 2. In HACS, *Frontend → GeoRide → Remove* to uninstall the
    `custom_components` files.
-3. The bearer token stays valid on GeoRide's side until it expires
-   naturally (30 days after it was last renewed). To revoke it sooner,
-   change your GeoRide password.
+3. The session stays valid on GeoRide's side until it expires
+   (90 days).
 
 ## Quality scale
 

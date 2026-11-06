@@ -1,4 +1,4 @@
-"""Tests for the GeoRide coordinator (update cycle, events, socket dispatch)."""
+"""Tests for the GeoRide coordinator (update cycle, secondary refreshes, events)."""
 from __future__ import annotations
 
 import pytest
@@ -19,7 +19,6 @@ from custom_components.georide.api import (  # noqa: E402
     GeoRideError,
 )
 from custom_components.georide.const import (  # noqa: E402
-    CONF_TOKEN_CREATED_AT,
     DOMAIN,
     EVENT_ALARM,
     EVENT_LOCK,
@@ -49,6 +48,7 @@ def _client(
     beacons=None,
     trips=None,
     maintenance=None,
+    events=None,
     trackers_raises=None,
 ):
     client = AsyncMock()
@@ -59,7 +59,8 @@ def _client(
     client.get_tracker_beacons = AsyncMock(return_value=beacons or [])
     client.get_trips = AsyncMock(return_value=trips or [])
     client.get_maintenance = AsyncMock(return_value=maintenance or [])
-    client.renew_token = AsyncMock(return_value="renewed-token")
+    client.get_events = AsyncMock(return_value=events or [])
+    client.add_trip_metrics = AsyncMock(side_effect=lambda tid, trip: trip)
     return client
 
 
@@ -105,30 +106,33 @@ class TestUpdateData:
 # Beacons + trips + maintenance refresh
 # ---------------------------------------------------------------------------
 class TestSecondaryRefresh:
-    async def test_beacons_only_fetched_when_hasBeacon(self, hass):
+    async def test_beacons_fetched_for_every_tracker(self, hass):
         entry = _make_entry(hass)
         client = _client(
-            trackers=[
-                {"trackerId": 1, "hasBeacon": False},
-                {"trackerId": 2, "hasBeacon": True},
-            ],
-            beacons=[{"id": 99, "name": "Badge"}],
+            trackers=[{"trackerId": 1}, {"trackerId": 2}],
+            beacons=[{"id": "beacon_99", "name": "Badge"}],
         )
         coord = GeoRideCoordinator(hass, entry, client)
-        await coord._async_update_data()
+        data = await coord._async_update_data()
 
-        # Only tracker 2 should have triggered a fetch.
+        assert client.get_tracker_beacons.call_count == 2
+        assert coord.beacons[2] == [{"id": "beacon_99", "name": "Badge"}]
+        assert data[1]["hasBeacon"] is True
+
+    async def test_beacons_refreshed_with_maintenance_cadence(self, hass):
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+        data = await coord._async_update_data()
         assert client.get_tracker_beacons.call_count == 1
-        called_with = client.get_tracker_beacons.call_args.args[0]
-        assert called_with == 2
-        assert coord.beacons[2] == [{"id": 99, "name": "Badge"}]
-        assert coord.beacons[1] == []
+        assert data[1]["hasBeacon"] is False
 
     async def test_beacon_fetch_failure_keeps_previous_snapshot(self, hass):
         entry = _make_entry(hass)
         client = _client(
-            trackers=[{"trackerId": 1, "hasBeacon": True}],
-            beacons=[{"id": 99, "name": "Old"}],
+            trackers=[{"trackerId": 1}],
+            beacons=[{"id": "beacon_99", "name": "Old"}],
         )
         coord = GeoRideCoordinator(hass, entry, client)
         await coord._async_update_data()
@@ -136,6 +140,7 @@ class TestSecondaryRefresh:
 
         # Next refresh fails on beacons but trackers succeed.
         client.get_tracker_beacons.side_effect = GeoRideConnectionError("oops")
+        coord._maintenance_fetched_at = None
         await coord._async_update_data()
         assert coord.beacons[1][0]["name"] == "Old"  # unchanged
 
@@ -231,95 +236,6 @@ class TestSecondaryRefresh:
 # ---------------------------------------------------------------------------
 # Token renewal
 # ---------------------------------------------------------------------------
-class TestTokenRenewal:
-    def _entry_with_stamp(self, hass, created_at):
-        entry = MockConfigEntry(
-            domain=DOMAIN,
-            unique_id="bike@example.com",
-            title="bike@example.com",
-            data={
-                "email": "bike@example.com",
-                "token": "t",
-                CONF_TOKEN_CREATED_AT: created_at,
-            },
-        )
-        entry.add_to_hass(hass)
-        return entry
-
-    async def test_renews_when_mint_date_unknown(self, hass):
-        """Entries created before the feature have no stamp → renew now."""
-        entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}])
-        coord = GeoRideCoordinator(hass, entry, client)
-        await coord._async_update_data()
-
-        assert client.renew_token.await_count == 1
-        assert entry.data["token"] == "renewed-token"
-        assert CONF_TOKEN_CREATED_AT in entry.data
-
-    async def test_skips_when_token_fresh(self, hass):
-        fresh = datetime.now(tz=timezone.utc).isoformat()
-        entry = self._entry_with_stamp(hass, fresh)
-        client = _client(trackers=[{"trackerId": 1}])
-        coord = GeoRideCoordinator(hass, entry, client)
-        await coord._async_update_data()
-
-        client.renew_token.assert_not_awaited()
-        assert entry.data["token"] == "t"
-
-    async def test_renews_when_token_older_than_interval(self, hass):
-        old = (datetime.now(tz=timezone.utc) - timedelta(days=8)).isoformat()
-        entry = self._entry_with_stamp(hass, old)
-        client = _client(trackers=[{"trackerId": 1}])
-        coord = GeoRideCoordinator(hass, entry, client)
-        await coord._async_update_data()
-
-        assert client.renew_token.await_count == 1
-        assert entry.data["token"] == "renewed-token"
-
-    async def test_renews_when_stamp_unparseable(self, hass):
-        entry = self._entry_with_stamp(hass, "garbage")
-        client = _client(trackers=[{"trackerId": 1}])
-        coord = GeoRideCoordinator(hass, entry, client)
-        await coord._async_update_data()
-
-        assert client.renew_token.await_count == 1
-
-    async def test_failure_keeps_token_and_does_not_break_update(self, hass):
-        entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}])
-        client.renew_token = AsyncMock(side_effect=GeoRideConnectionError("down"))
-        coord = GeoRideCoordinator(hass, entry, client)
-
-        data = await coord._async_update_data()
-        assert 1 in data  # update cycle unaffected
-        assert entry.data["token"] == "t"
-        assert CONF_TOKEN_CREATED_AT not in entry.data
-
-    async def test_failure_retry_is_throttled(self, hass):
-        entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}])
-        client.renew_token = AsyncMock(side_effect=GeoRideConnectionError("down"))
-        coord = GeoRideCoordinator(hass, entry, client)
-
-        await coord._async_update_data()
-        await coord._async_update_data()
-        # Second cycle lands inside TOKEN_RENEWAL_RETRY → no second attempt.
-        assert client.renew_token.await_count == 1
-
-    async def test_socket_receives_new_token(self, hass):
-        entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}])
-        coord = GeoRideCoordinator(hass, entry, client)
-        coord._socket = MagicMock()
-
-        await coord._async_update_data()
-        coord._socket.update_token.assert_called_once_with("renewed-token")
-
-
-# ---------------------------------------------------------------------------
-# Subscription expiry repair issues
-# ---------------------------------------------------------------------------
 class TestSubscriptionExpiry:
     async def test_raises_issue_when_expiring_soon(self, hass):
         entry = _make_entry(hass)
@@ -414,133 +330,94 @@ class TestStateChangeEvents:
         await hass.async_block_till_done()
         assert any(ev.data.get("moving") is True for ev in events)
 
-    async def test_alarm_transition_fires_event(self, hass):
+
+# ---------------------------------------------------------------------------
+# Tracker events (v2 replacement for the realtime socket alarms)
+# ---------------------------------------------------------------------------
+class TestTrackerEvents:
+    async def test_first_poll_only_records_position(self, hass):
         events = []
         hass.bus.async_listen(EVENT_ALARM, lambda e: events.append(e))
         entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1, "isStolen": False}])
+        client = _client(
+            trackers=[{"trackerId": 1, "trackerName": "ZX"}],
+            events=[{"kind": "event/vibration/detected", "occurredAt": "2026-11-01T15:02:46.000Z"}],
+        )
         coord = GeoRideCoordinator(hass, entry, client)
-        await coord.async_refresh()
-
-        client.get_trackers = AsyncMock(return_value=[{"trackerId": 1, "isStolen": True}])
-        await coord.async_refresh()
+        await coord._async_update_data()
         await hass.async_block_till_done()
-        assert any(ev.data.get("type") == "stolen" for ev in events)
+        assert events == []
 
-
-# ---------------------------------------------------------------------------
-# Socket event routing
-# ---------------------------------------------------------------------------
-class TestSocketRouting:
-    async def _coord(self, hass, trackers=None):
-        entry = _make_entry(hass)
-        client = _client(trackers=trackers or [{"trackerId": 1}])
-        coord = GeoRideCoordinator(hass, entry, client)
-        await coord.async_refresh()
-        return coord
-
-    async def test_message_event_is_ignored(self, hass):
-        coord = await self._coord(hass)
-        await coord._handle_socket_event("message", "Welcome")
-        # No exception, no state change.
-
-    async def test_position_event_merges_into_tracker(self, hass):
-        coord = await self._coord(hass)
-        await coord._handle_socket_event(
-            "position",
-            {"trackerId": 1, "latitude": 45.5, "longitude": 4.5, "speed": 30},
-        )
-        assert coord.data[1]["latitude"] == 45.5
-        assert coord.data[1]["speed"] == 30
-
-    async def test_position_event_with_unknown_tracker_does_nothing(self, hass):
-        coord = await self._coord(hass)
-        before = dict(coord.data)
-        await coord._handle_socket_event(
-            "position",
-            {"trackerId": 999, "latitude": 1.0},
-        )
-        assert coord.data == before
-
-    async def test_lock_event_merges_islocked(self, hass):
-        coord = await self._coord(hass)
-        await coord._handle_socket_event(
-            "lockedPosition",
-            {"trackerId": 1, "isLocked": False},
-        )
-        assert coord.data[1]["isLocked"] is False
-
-    async def test_alarm_event_fires_ha_event(self, hass):
+    async def test_new_events_fired_oldest_first(self, hass):
         events = []
         hass.bus.async_listen(EVENT_ALARM, lambda e: events.append(e))
-        coord = await self._coord(hass)
-        await coord._handle_socket_event(
-            "alarm",
-            {"trackerId": 1, "type": "alarm_vibration"},
-        )
+        entry = _make_entry(hass)
+        old = {"kind": "event/vibration/detected", "occurredAt": "2026-11-01T15:02:46.000Z"}
+        client = _client(trackers=[{"trackerId": 1, "trackerName": "ZX"}], events=[old])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+
+        client.get_events = AsyncMock(return_value=[
+            {"kind": "event/movement/detected", "occurredAt": "2026-11-06T18:00:02.000Z"},
+            {"kind": "event/vibration/detected", "occurredAt": "2026-11-06T18:00:01.000Z"},
+            old,
+        ])
+        await coord._async_update_data()
+        await coord._async_update_data()  # same list again: nothing new
         await hass.async_block_till_done()
-        assert events and events[0].data["type"] == "vibration"
-        assert events[0].data["source"] == "realtime"
+        assert [e.data["type"] for e in events] == ["vibration/detected", "movement/detected"]
+        assert events[0].data["tracker_name"] == "ZX"
+        assert events[0].data["source"] == "events"
 
-    async def test_device_event_triggers_refresh(self, hass):
-        coord = await self._coord(hass)
-        with patch.object(coord, "async_request_refresh", new=AsyncMock()) as m:
-            await coord._handle_socket_event("device", {})
-            assert m.called
-
-    async def test_refresh_tracker_instruction_triggers_refresh(self, hass):
-        coord = await self._coord(hass)
-        with patch.object(coord, "async_request_refresh", new=AsyncMock()) as m:
-            await coord._handle_socket_event("refreshTrackersInstruction", {})
-            assert m.called
-
-
-# ---------------------------------------------------------------------------
-# Socket start/stop lifecycle
-# ---------------------------------------------------------------------------
-class TestSocketLifecycle:
-    async def test_start_socket_swallows_connect_errors(self, hass):
+    async def test_event_fetch_failure_is_ignored(self, hass):
         entry = _make_entry(hass)
         client = _client(trackers=[{"trackerId": 1}])
+        client.get_events = AsyncMock(side_effect=GeoRideConnectionError("down"))
         coord = GeoRideCoordinator(hass, entry, client)
+        assert 1 in await coord._async_update_data()
 
-        with patch(
-            "custom_components.georide.coordinator.GeoRideSocketClient"
-        ) as mock_cls:
-            instance = AsyncMock()
-            instance.connect = AsyncMock(side_effect=Exception("dns"))
-            mock_cls.return_value = instance
-            await coord.async_start_socket("token")
-            # No socket cached because connect failed.
-            assert coord._socket is None
 
-    async def test_start_socket_idempotent(self, hass):
+class TestLastTripMetrics:
+    async def test_latest_trip_gets_metrics(self, hass):
         entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}])
+        client = _client(
+            trackers=[{"trackerId": 1}],
+            trips=[{"id": "trip_1", "endTime": "2026-09-13T17:32:41Z"}],
+        )
+        client.add_trip_metrics = AsyncMock(
+            side_effect=lambda tid, trip: {**trip, "averageSpeed": 61}
+        )
         coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+        assert coord.last_trips[1]["averageSpeed"] == 61
 
-        with patch(
-            "custom_components.georide.coordinator.GeoRideSocketClient"
-        ) as mock_cls:
-            instance = AsyncMock()
-            instance.connect = AsyncMock()
-            mock_cls.return_value = instance
-            await coord.async_start_socket("token")
-            await coord.async_start_socket("token")  # second call no-ops
-            assert mock_cls.call_count == 1
-
-    async def test_stop_socket_clears_reference(self, hass):
+    async def test_metrics_failure_keeps_trip(self, hass):
         entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}])
+        client = _client(trackers=[{"trackerId": 1}], trips=[{"id": "trip_1"}])
+        client.add_trip_metrics = AsyncMock(side_effect=GeoRideError("404"))
         coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+        assert coord.last_trips[1] == {"id": "trip_1"}
 
-        with patch(
-            "custom_components.georide.coordinator.GeoRideSocketClient"
-        ) as mock_cls:
-            instance = AsyncMock()
-            instance.connect = AsyncMock()
-            instance.disconnect = AsyncMock()
-            mock_cls.return_value = instance
-            await coord.async_start_socket("token")
-            await coord.async_stop_socket()
-            assert coord._socket is None
+
+class TestStaleMaintenanceCleanup:
+    async def test_v1_maintenance_entities_removed_v2_kept(self, hass):
+        from homeassistant.helpers import entity_registry as er
+
+        from custom_components.georide import _cleanup_stale_maintenance
+
+        entry = _make_entry(hass)
+        registry = er.async_get(hass)
+        old = registry.async_get_or_create("sensor", DOMAIN, "1-maintenance-42", config_entry=entry)
+        new = registry.async_get_or_create("sensor", DOMAIN, "1-maintenance-maintenance_a", config_entry=entry)
+        other = registry.async_get_or_create("sensor", DOMAIN, "2-maintenance-7", config_entry=entry)
+        odometer = registry.async_get_or_create("sensor", DOMAIN, "1-odometer", config_entry=entry)
+
+        coord = MagicMock(maintenance={1: [{"id": "maintenance_a"}]})
+        _cleanup_stale_maintenance(hass, entry, coord)
+
+        assert registry.async_get(old.entity_id) is None
+        assert registry.async_get(new.entity_id) is not None
+        # Tracker 2's maintenance wasn't fetched: left alone.
+        assert registry.async_get(other.entity_id) is not None
+        assert registry.async_get(odometer.entity_id) is not None
