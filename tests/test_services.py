@@ -5,14 +5,14 @@ import pytest
 
 # Must come before any HA / phacc imports so the file is skipped cleanly on
 # the lightweight py3.9 venv that has neither installed.
-pytest.importorskip("pytest_homeassistant_custom_component")
+pytest.importorskip("pytest_homeassistant")
 
 from datetime import date  # noqa: E402
 from unittest.mock import AsyncMock, MagicMock  # noqa: E402
 
 from homeassistant.const import CONF_EMAIL, CONF_TOKEN  # noqa: E402
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError  # noqa: E402
-from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
+from pytest_homeassistant.common import MockConfigEntry  # noqa: E402
 
 from custom_components.georide import services  # noqa: E402
 from custom_components.georide.api import (  # noqa: E402

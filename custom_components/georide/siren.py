@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.siren import (  # type: ignore[attr-defined]
+from homeassistant.components.siren import (  # type: ignore[attr-defined, unused-ignore]
     SirenEntity,
     SirenEntityFeature,
 )

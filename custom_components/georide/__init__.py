@@ -7,6 +7,7 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_TOKEN
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
@@ -18,6 +19,9 @@ from .coordinator import GeoRideCoordinator
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
+
+# Set up from the UI only; async_setup exists just to register the services.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:

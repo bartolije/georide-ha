@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("pytest_homeassistant_custom_component")
+pytest.importorskip("pytest_homeassistant")
 
 from datetime import datetime, timedelta, timezone  # noqa: E402
 from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
 from homeassistant.exceptions import ConfigEntryAuthFailed  # noqa: E402
 from homeassistant.helpers import issue_registry as ir  # noqa: E402
 from homeassistant.helpers.update_coordinator import UpdateFailed  # noqa: E402
-from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
+from pytest_homeassistant.common import MockConfigEntry  # noqa: E402
 
 from custom_components.georide.api import (  # noqa: E402
     GeoRideAuthError,

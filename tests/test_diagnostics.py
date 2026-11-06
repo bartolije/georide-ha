@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("pytest_homeassistant_custom_component")
+pytest.importorskip("pytest_homeassistant")
 
 from datetime import timedelta  # noqa: E402
 from unittest.mock import AsyncMock, MagicMock  # noqa: E402
 
 from homeassistant.const import CONF_EMAIL, CONF_TOKEN  # noqa: E402
 from homeassistant.helpers import device_registry as dr  # noqa: E402
-from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
+from pytest_homeassistant.common import MockConfigEntry  # noqa: E402
 
 from custom_components.georide import diagnostics  # noqa: E402
 from custom_components.georide.const import DOMAIN  # noqa: E402

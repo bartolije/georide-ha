@@ -1,10 +1,10 @@
 """Pytest fixtures + conditional import shim.
 
 The integration imports from `homeassistant.*` at package load time. When
-Home Assistant is installed in the active venv (e.g. via
-`pytest-homeassistant-custom-component` on Python 3.12+), tests load the
-real integration directly. When HA is not available (e.g. the lightweight
-Python 3.9 venv used for live API tests), this conftest installs a minimal
+Home Assistant is installed in the active venv (via the official
+`pytest-homeassistant` package, Python 3.14), tests load the real
+integration directly. When HA is not available (e.g. the lightweight
+venv used for live API tests), this conftest installs a minimal
 shim so the API client and `const.py` can still be loaded for testing the
 network layer in isolation.
 """
@@ -133,27 +133,14 @@ async def authed_client(aiohttp_session, georide_session):
 
 
 # ---------------------------------------------------------------------------
-# 5. HA-only fixtures — auto-enable the pytest-homeassistant-custom-component
-#    plugin when running on a venv that has it installed
-# ---------------------------------------------------------------------------
-if _HA_NATIVE:
-    pytest_plugins = ("pytest_homeassistant_custom_component",)
-
-    @pytest.fixture(autouse=True)
-    def auto_enable_custom_integrations(enable_custom_integrations):
-        """Required by pytest-homeassistant-custom-component to find our package."""
-        yield
-
-
-# ---------------------------------------------------------------------------
-# 6. Cross-venv routing: live tests need raw aiohttp (works in py3.9 .venv).
-#    HA's bundled aiodns/aiohttp pair fights live tests in .venv-ha, so we
-#    skip live runs there and rely on the lightweight venv for live coverage.
+# 5. Cross-venv routing: live tests need raw aiohttp. HA's bundled
+#    aiodns/aiohttp pair fights live tests in the HA venv, so we skip live
+#    runs there and rely on a lightweight venv (no HA) for live coverage.
 # ---------------------------------------------------------------------------
 def pytest_collection_modifyitems(config, items):
     if _HA_NATIVE:
         skip_live = pytest.mark.skip(
-            reason="Live tests run in the .venv (py3.9) venv only; "
+            reason="Live tests run in a venv without Home Assistant only; "
             "HA's bundled aiohttp/aiodns versions break raw client calls."
         )
         for item in items:

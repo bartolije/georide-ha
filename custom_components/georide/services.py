@@ -5,7 +5,10 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Any
 
-import voluptuous as vol
+try:
+    import probatio as vol  # type: ignore[import-not-found, unused-ignore]  # HA 2026.11+
+except ImportError:  # older Home Assistant
+    import voluptuous as vol  # type: ignore[no-redef, unused-ignore]
 
 from homeassistant.core import (
     HomeAssistant,

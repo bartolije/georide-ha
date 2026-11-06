@@ -63,11 +63,14 @@ class GeoRideBeaconEntity(CoordinatorEntity[GeoRideCoordinator]):
 
         device_info = DeviceInfo(
             identifiers={(DOMAIN, f"beacon-{beacon_id}")},
-            via_device=(DOMAIN, str(tracker_id)),
             name=beacon.get("name") or f"GeoRide beacon {beacon_id}",
             manufacturer=MANUFACTURER,
             model=beacon.get("model"),
         )
+        # Item access works on both the old TypedDict and the 2026.11 dataclass,
+        # which hides the deprecated key from type checkers.
+        # shortcut: via_device goes away in HA 2027.8; switch to via_device_id once the minimum HA is 2026.11.
+        device_info["via_device"] = (DOMAIN, str(tracker_id))
         if connections:
             device_info["connections"] = connections
         self._attr_device_info = device_info

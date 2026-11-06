@@ -324,8 +324,10 @@ dans [`custom_components/georide/quality_scale.yaml`](custom_components/georide/
 - 🏆 Platine : **2 / 3** règles, la 3e exemptée (aucune dépendance
   externe : le client de l'API est dans l'intégration)
 
-Le tout vérifié par mypy `--strict` et 255 tests (97 % de couverture),
-lancés par la CI à chaque push. C'est une auto-évaluation : Home
+Le tout vérifié à chaque push par la CI : mypy `--strict` et 255 tests
+(97 % de couverture) contre la dernière version de Home Assistant, plus
+les validations officielles `hassfest` et HACS (aussi lancées chaque
+semaine pour repérer une version de HA qui casserait l'intégration). C'est une auto-évaluation : Home
 Assistant n'audite l'échelle de qualité que pour les intégrations
 officielles.
 

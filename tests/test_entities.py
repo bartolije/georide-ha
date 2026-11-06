@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("pytest_homeassistant_custom_component")
+pytest.importorskip("pytest_homeassistant")
 
 from datetime import datetime, timezone  # noqa: E402
 from unittest.mock import AsyncMock, MagicMock  # noqa: E402
@@ -664,7 +664,7 @@ from custom_components.georide import (  # noqa: E402
     siren as siren_module,
     switch as switch_module,
 )
-from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
+from pytest_homeassistant.common import MockConfigEntry  # noqa: E402
 
 
 async def _entry_with_coord(hass, **coord_overrides):

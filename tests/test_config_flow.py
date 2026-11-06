@@ -14,13 +14,13 @@ import pytest
 # installed. The lightweight conftest shim fakes a `homeassistant` module
 # for the API-only tests, so `importorskip("homeassistant")` is not enough
 # — we need a marker library that only the real HA test environment has.
-pytest.importorskip("pytest_homeassistant_custom_component")
+pytest.importorskip("pytest_homeassistant")
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_EMAIL, CONF_TOKEN
 from homeassistant.data_entry_flow import FlowResultType
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.georide.api import (
     GeoRideAuthError,
