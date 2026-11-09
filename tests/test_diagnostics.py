@@ -41,6 +41,7 @@ class TestEntryDiagnostics:
     async def test_redacts_token_email_and_unique_id(self, hass):
         entry = MockConfigEntry(
             domain=DOMAIN,
+            title="bike@example.com",
             unique_id="bike@example.com",
             data={CONF_EMAIL: "bike@example.com", CONF_TOKEN: "very-secret"},
         )
@@ -51,6 +52,7 @@ class TestEntryDiagnostics:
 
         # Sensitive entry fields are masked.
         assert "very-secret" not in str(result)
+        assert "bike@example.com" not in str(result)
         assert result["entry"]["data"][CONF_TOKEN] == "**REDACTED**"
         assert result["entry"]["data"][CONF_EMAIL] == "**REDACTED**"
 

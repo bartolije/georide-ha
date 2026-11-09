@@ -1,7 +1,7 @@
 """Diagnostics support for the GeoRide integration.
 
-Both entry-level and device-level diagnostics. Lat/lon/addresses and the bearer
-token are redacted before returning the snapshot to the user.
+Both entry-level and device-level diagnostics. Lat/lon/addresses, the session
+token and the account email are redacted before returning the snapshot to the user.
 """
 from __future__ import annotations
 
@@ -16,7 +16,8 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN
 from .coordinator import GeoRideCoordinator
 
-_ENTRY_TO_REDACT = {CONF_TOKEN, CONF_EMAIL, "unique_id"}
+# The entry title is the account email (config_flow).
+_ENTRY_TO_REDACT = {CONF_TOKEN, CONF_EMAIL, "unique_id", "title"}
 
 _TRACKER_TO_REDACT = {
     "latitude",
