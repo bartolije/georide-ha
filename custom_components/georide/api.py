@@ -213,11 +213,6 @@ class GeoRideApiClient:
         """Disable the manual lock."""
         await self._command(tracker_id, "manual-lock/disable")
 
-    async def siren_on(self, tracker_id: int) -> None:
-        """Ring the Live Alarm siren for its configured duration."""
-        # shortcut: route proven to exist, call never fired on a real bike; check on first use.
-        await self._command(tracker_id, "accessories/live-alarm/trigger")
-
     async def eco_mode_on(self, tracker_id: int) -> None:
         """Queue the switch to eco mode (applied at the tracker's next connection)."""
         await self._command(tracker_id, "settings/mode/eco")

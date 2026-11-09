@@ -3,7 +3,7 @@
 Targets the lines that coordinator/services tests don't cover: entity
 constructors (DeviceInfo, unique_id), value_fn dispatch in sensor and
 binary_sensor descriptions, the device_tracker GPS properties, and the
-lock / siren / switch action paths including their HomeAssistantError
+lock / switch action paths including their HomeAssistantError
 mappings.
 """
 from __future__ import annotations
@@ -53,8 +53,6 @@ from custom_components.georide.sensor import (  # noqa: E402
     GeoRideMaintenanceSensor,
     GeoRideSensor,
 )
-from homeassistant.components.siren import SirenEntityFeature  # noqa: E402
-from custom_components.georide.siren import GeoRideSiren  # noqa: E402
 from custom_components.georide.switch import GeoRideEcoModeSwitch  # noqa: E402
 
 
@@ -574,42 +572,6 @@ class TestLock:
 
 
 # ---------------------------------------------------------------------------
-# Siren
-# ---------------------------------------------------------------------------
-class TestSiren:
-    async def test_is_on_returns_none(self):
-        coord = _coordinator()
-        siren = GeoRideSiren(coord, TID)
-        # GeoRide doesn't report siren state; we treat it as unknown.
-        assert siren.is_on is None
-        assert siren.unique_id == f"{TID}-siren"
-
-    async def test_turn_on_calls_client(self):
-        coord = _coordinator()
-        siren = GeoRideSiren(coord, TID)
-        await siren.async_turn_on()
-        coord.client.siren_on.assert_awaited_once_with(TID)
-
-    async def test_trigger_only_no_turn_off(self):
-        siren = GeoRideSiren(_coordinator(), TID)
-        assert siren.supported_features == SirenEntityFeature.TURN_ON
-
-    async def test_auth_error_maps_to_home_assistant_error(self):
-        coord = _coordinator()
-        coord.client.siren_on = AsyncMock(side_effect=GeoRideAuthError("bad"))
-        siren = GeoRideSiren(coord, TID)
-        with pytest.raises(HomeAssistantError):
-            await siren.async_turn_on()
-
-    async def test_connection_error_maps(self):
-        coord = _coordinator()
-        coord.client.siren_on = AsyncMock(side_effect=GeoRideConnectionError("net"))
-        siren = GeoRideSiren(coord, TID)
-        with pytest.raises(HomeAssistantError):
-            await siren.async_turn_on()
-
-
-# ---------------------------------------------------------------------------
 # Switch (eco mode)
 # ---------------------------------------------------------------------------
 class TestEcoModeSwitch:
@@ -661,7 +623,6 @@ from custom_components.georide import (  # noqa: E402
     device_tracker as dt_module,
     lock as lock_module,
     sensor as sensor_module,
-    siren as siren_module,
     switch as switch_module,
 )
 from pytest_homeassistant.common import MockConfigEntry  # noqa: E402
@@ -740,19 +701,6 @@ class TestSetupEntry:
         added: list = []
         await lock_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
         assert len(added) == 1
-
-    async def test_siren_setup_creates_one_with_live_alarm(self, hass):
-        tracker = {**TRACKER, "capabilities": ["accessory/live-alarm"]}
-        entry, _ = await _entry_with_coord(hass, trackers=[tracker])
-        added: list = []
-        await siren_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
-        assert len(added) == 1
-
-    async def test_siren_setup_skips_without_live_alarm(self, hass):
-        entry, _ = await _entry_with_coord(hass)
-        added: list = []
-        await siren_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
-        assert added == []
 
     async def test_switch_setup_creates_eco_mode(self, hass):
         entry, _ = await _entry_with_coord(hass)

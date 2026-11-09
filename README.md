@@ -17,9 +17,8 @@ pour que chaque moto y apparaisse comme un appareil avec :
 - 📍 sa **position** sur la carte
 - 🔒 un **verrou** à distance (GeoRide 1 ; le GeoRide 3 se verrouille
   seul avec le badge ou le téléphone)
-- 🚨 la **sirène Live Alarm** déclenchable, et des événements HA quand
-  l'alarme se déclenche (vibration, mouvement…), avec environ 1 min de
-  délai
+- 🚨 des **événements HA** quand l'alarme se déclenche (vibration,
+  mouvement…), avec environ 1 min de délai
 - 🔋 sa **batterie en %**, son **compteur kilométrique** et son **dernier
   trajet** (distance, durée, vitesses, angle max à gauche et à droite)
 - 🛠️ un **capteur par entretien** configuré dans l'appli GeoRide
@@ -86,7 +85,6 @@ suivantes.
 |---|---|---|
 | `device_tracker` | (nom de la moto) | Position GPS, affichée sur la carte. |
 | `lock` | (nom de la moto) | Verrou manuel, traceurs GeoRide 1 seulement. Le GeoRide 3 se verrouille seul (badge, téléphone) : pas d'entité. |
-| `siren` | Sirène | Fait sonner la Live Alarm pendant la durée réglée dans l'appli. Créée seulement si le traceur a une Live Alarm. Déclenchement uniquement. |
 | `switch` | Mode éco | Mode « moto sans batterie » de l'appli. Appliqué à la prochaine connexion du traceur, ce qui peut prendre des heures quand il est en veille. |
 | `sensor` | Compteur kilométrique | Kilomètres parcourus. |
 | `sensor` | Vitesse | Indisponible : l'API v2 ne donne plus la vitesse instantanée. |
@@ -274,8 +272,6 @@ texte.
 - **La batterie en % est une estimation** : courbe linéaire de 11,0 V
   (0 %) à 12,7 V (100 %), alors que la décharge réelle d'une batterie
   au plomb ne l'est pas.
-- **L'état de la sirène n'est pas lisible** : l'API ne le renvoie pas,
-  l'entité l'affiche comme inconnu.
 - **Pas de vitesse instantanée, d'altitude, ni d'indicateur vol ou
   chute** avec l'API v2.
 - **Alarmes avec environ 1 min de délai** : il n'y a plus de temps

@@ -302,7 +302,6 @@ class TestCommands:
         [
             ("lock_tracker", "manual-lock/enable"),
             ("unlock_tracker", "manual-lock/disable"),
-            ("siren_on", "accessories/live-alarm/trigger"),
             ("eco_mode_on", "settings/mode/eco"),
             ("eco_mode_off", "settings/mode/running"),
         ],

@@ -11,7 +11,6 @@ PLATFORMS: list[Platform] = [
     Platform.DEVICE_TRACKER,
     Platform.LOCK,
     Platform.SENSOR,
-    Platform.SIREN,
     Platform.SWITCH,
 ]
 

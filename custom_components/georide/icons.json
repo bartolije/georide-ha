@@ -7,9 +7,6 @@
       "altitude": { "default": "mdi:image-filter-hdr" },
       "last_trip_max_lean_angle": { "default": "mdi:angle-acute" }
     },
-    "siren": {
-      "siren": { "default": "mdi:alarm-light" }
-    },
     "switch": {
       "eco_mode": {
         "default": "mdi:leaf",
