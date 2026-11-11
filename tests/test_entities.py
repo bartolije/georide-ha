@@ -28,6 +28,7 @@ from homeassistant.const import (  # noqa: E402
     UnitOfTime,
 )
 from homeassistant.exceptions import HomeAssistantError  # noqa: E402
+from homeassistant.helpers import device_registry as dr  # noqa: E402
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC  # noqa: E402
 
 from custom_components.georide.api import (  # noqa: E402
@@ -169,13 +170,18 @@ class TestEntityBases:
         coord.data = {}  # tracker disappeared
         assert sensor.available is False
 
-    def test_beacon_entity_device_info_includes_mac_connection(self):
-        coord = _coordinator(beacons={TID: [BEACON]})
+    async def test_beacon_entity_device_info_includes_mac_connection(self, hass):
+        entry, coord = await _entry_with_coord(hass, beacons={TID: [BEACON]})
+        coord.hass, coord.config_entry = hass, entry
         sensor = GeoRideBeaconSensor(coord, TID, BEACON["id"], BEACON_SENSORS[0])
         info = sensor._attr_device_info
         assert info is not None
         assert (DOMAIN, f"beacon-{BEACON['id']}") in info["identifiers"]
-        assert info["via_device"] == (DOMAIN, str(TID))
+        tracker = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, str(TID)), entry.entry_id
+        )
+        assert tracker is not None
+        assert info["via_device_id"] == tracker.id
         # MAC normalised to lowercase per the integration's contract.
         assert (CONNECTION_NETWORK_MAC, BEACON["macAddress"].lower()) in info[
             "connections"

@@ -43,7 +43,7 @@ de l'appli depuis sa version 5.5, interrogée toutes les 60 s.
 3. Le second badge ouvre l'ajout de l'intégration (ou *Paramètres →
    Appareils et services → Ajouter une intégration → GeoRide*).
 
-Home Assistant 2024.11 ou plus récent est requis.
+Home Assistant 2026.8 ou plus récent est requis.
 
 ### Installation manuelle (sans HACS)
 

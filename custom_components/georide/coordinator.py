@@ -258,8 +258,8 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             new = [e for e in events if isinstance(e.get("occurredAt"), str) and e["occurredAt"] > last]
             if not new:
                 continue
-            device = dr.async_get(self.hass).async_get_device(
-                identifiers={(DOMAIN, str(tid))}
+            device = dr.async_get(self.hass).async_get_device_by_identifier(
+                (DOMAIN, str(tid)), self.config_entry.entry_id
             )
             for event in sorted(new, key=lambda e: str(e["occurredAt"])):
                 self.hass.bus.async_fire(
@@ -303,8 +303,8 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             if prev is None:
                 continue  # newly-added tracker; skip transitions
 
-            device = device_registry.async_get_device(
-                identifiers={(DOMAIN, str(tid))}
+            device = device_registry.async_get_device_by_identifier(
+                (DOMAIN, str(tid)), self.config_entry.entry_id
             )
             base = {
                 "device_id": device.id if device else None,

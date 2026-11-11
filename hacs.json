@@ -4,5 +4,5 @@
   "zip_release": true,
   "filename": "georide.zip",
   "render_readme": true,
-  "homeassistant": "2024.11.0"
+  "homeassistant": "2026.8.0"
 }

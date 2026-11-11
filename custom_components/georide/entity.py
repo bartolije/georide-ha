@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -40,7 +41,7 @@ class GeoRideBeaconEntity(CoordinatorEntity[GeoRideCoordinator]):
     """Base entity bound to a GeoRide beacon (key fob, top-case, etc.).
 
     Beacons appear as separate Home Assistant devices, attached to their
-    parent tracker via `via_device` so they appear nested in the UI.
+    parent tracker via `via_device_id` so they appear nested in the UI.
     """
 
     _attr_has_entity_name = True
@@ -61,16 +62,19 @@ class GeoRideBeaconEntity(CoordinatorEntity[GeoRideCoordinator]):
         if isinstance(mac, str) and mac:
             connections.add((CONNECTION_NETWORK_MAC, mac.lower()))
 
+        # via_device_id needs the tracker's registry id; platforms set up in
+        # parallel, so the tracker device may not exist yet: its entities fill it in.
+        parent = dr.async_get(coordinator.hass).async_get_or_create(
+            config_entry_id=coordinator.config_entry.entry_id,
+            identifiers={(DOMAIN, str(tracker_id))},
+        )
         device_info = DeviceInfo(
             identifiers={(DOMAIN, f"beacon-{beacon_id}")},
             name=beacon.get("name") or f"GeoRide beacon {beacon_id}",
             manufacturer=MANUFACTURER,
             model=beacon.get("model"),
+            via_device_id=parent.id,
         )
-        # Item access works on both the old TypedDict and the 2026.11 dataclass,
-        # which hides the deprecated key from type checkers.
-        # shortcut: via_device goes away in HA 2027.8; switch to via_device_id once the minimum HA is 2026.11.
-        device_info["via_device"] = (DOMAIN, str(tracker_id))
         if connections:
             device_info["connections"] = connections
         self._attr_device_info = device_info
