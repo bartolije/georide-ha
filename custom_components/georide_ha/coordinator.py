@@ -32,10 +32,12 @@ from .api import (
     GeoRideError,
 )
 from .const import (
+    CONF_LEGACY,
     DOMAIN,
     EVENT_ALARM,
     EVENT_LOCK,
     EVENT_MOVING,
+    LEGACY_DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -262,7 +264,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
                 (DOMAIN, str(tid)), self.config_entry.entry_id
             )
             for event in sorted(new, key=lambda e: str(e["occurredAt"])):
-                self.hass.bus.async_fire(
+                self._fire(
                     EVENT_ALARM,
                     {
                         "device_id": device.id if device else None,
@@ -293,6 +295,12 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
                 new_beacons[tid] = self.beacons.get(tid, [])
         self.beacons = new_beacons
 
+    def _fire(self, event: str, data: dict[str, Any]) -> None:
+        self.hass.bus.async_fire(event, data)
+        if self.config_entry.data.get(CONF_LEGACY):
+            # Taken over from the 0.17 domain: its users' automations keep working.
+            self.hass.bus.async_fire(event.replace(DOMAIN, LEGACY_DOMAIN, 1), data)
+
     def _fire_state_change_events(
         self, previous: TrackersById, current: TrackersById
     ) -> None:
@@ -315,13 +323,13 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             if isinstance(prev.get("isLocked"), bool) and isinstance(
                 tracker.get("isLocked"), bool
             ) and prev["isLocked"] != tracker["isLocked"]:
-                self.hass.bus.async_fire(
+                self._fire(
                     EVENT_LOCK, {**base, "is_locked": tracker["isLocked"]}
                 )
 
             if isinstance(prev.get("moving"), bool) and isinstance(
                 tracker.get("moving"), bool
             ) and prev["moving"] != tracker["moving"]:
-                self.hass.bus.async_fire(
+                self._fire(
                     EVENT_MOVING, {**base, "moving": tracker["moving"]}
                 )

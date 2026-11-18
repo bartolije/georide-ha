@@ -52,10 +52,13 @@ def _to_utc_iso(d: date, *, end_of_day: bool = False) -> str:
     return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-async def async_setup_services(hass: HomeAssistant) -> None:
-    """Register integration services (idempotent)."""
+async def async_setup_services(hass: HomeAssistant, domain: str = DOMAIN) -> None:
+    """Register integration services (idempotent).
 
-    if hass.services.has_service(DOMAIN, SERVICE_TRIP_SUMMARY):
+    `domain` is LEGACY_DOMAIN for the 0.17 service name kept for entries taken over.
+    """
+
+    if hass.services.has_service(domain, SERVICE_TRIP_SUMMARY):
         return
 
     async def handle_trip_summary(call: ServiceCall) -> ServiceResponse:
@@ -151,7 +154,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         return response
 
     hass.services.async_register(
-        DOMAIN,
+        domain,
         SERVICE_TRIP_SUMMARY,
         handle_trip_summary,
         schema=TRIP_SUMMARY_SCHEMA,
