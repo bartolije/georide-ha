@@ -51,23 +51,19 @@ API).
 
 Home Assistant 2026.8 ou plus récent est requis.
 
-### Depuis une version 0.17 ou antérieure
+### Depuis une version 0.17
 
 La 0.18 change le domaine de l'intégration (`georide` → `georide_ha`)
-pour cohabiter avec l'autre intégration GeoRide. Home Assistant la voit
-comme une nouvelle intégration :
+pour cohabiter avec l'autre intégration GeoRide. **Rien à faire depuis
+la 0.17.7** : après la mise à jour et le redémarrage, la 0.18 reprend ton
+compte, tes appareils et tes entités (mêmes identifiants, historique
+conservé), garde les anciens noms d'événements (`georide_…_event`) et de
+service (`georide.trip_summary`) pour tes automatisations, puis supprime
+l'ancien dossier `custom_components/georide`.
 
-1. **Avant** la mise à jour : *Paramètres → Appareils et services →
-   GeoRide → ⋮ → Supprimer*.
-2. Mets à jour dans HACS. Si le dossier `config/custom_components/georide`
-   existe encore, supprime-le, puis redémarre Home Assistant.
-3. Ajoute de nouveau l'intégration (nouveau code par e-mail). Les
-   entités reprennent les mêmes identifiants, sauf ceux que tu avais
-   renommés à la main : historique, cartes et automatisations sur ces
-   entités restent valables.
-4. Dans tes automatisations, remplace `georide_…_event` par
-   `georide_ha_…_event` et `georide.trip_summary` par
-   `georide_ha.trip_summary`.
+Si tu passes directement d'une version plus ancienne à la 0.18, ajoute
+simplement l'intégration GeoRide (nouveau code par e-mail) : elle
+reprend l'ancienne installation de la même façon.
 
 ### Installation manuelle (sans HACS)
 
