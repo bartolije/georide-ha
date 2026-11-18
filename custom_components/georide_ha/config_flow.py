@@ -113,6 +113,21 @@ class GeoRideConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_import(
+        self, import_data: dict[str, Any]
+    ) -> ConfigFlowResult:
+        """Take over an entry of the 0.17 `georide` domain (started by its 0.17.7 code).
+
+        The new entry reuses the session; its setup moves the old devices and
+        entities over and removes the old entry (__init__._async_adopt_legacy_entry).
+        """
+        legacy = self.hass.config_entries.async_get_entry(import_data["entry_id"])
+        if legacy is None:
+            return self.async_abort(reason="already_configured")
+        await self.async_set_unique_id(legacy.unique_id)
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(title=legacy.title, data=dict(legacy.data))
+
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]
     ) -> ConfigFlowResult:
