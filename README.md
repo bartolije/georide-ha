@@ -33,21 +33,45 @@ de l'appli depuis sa version 5.5, interrogée toutes les 60 s.
 
 ## Installation
 
+1. Dans HACS, cherche **GeoRide** et installe celle du dépôt
+   `bartolije/georide-ha`, puis redémarre Home Assistant. Tant qu'elle
+   n'apparaît pas dans la recherche, ajoute le dépôt à la main avec le
+   premier badge ci-dessous (ou *HACS → ⋮ → Dépôts personnalisés →*
+   `https://github.com/bartolije/georide-ha`, type *Intégration*).
+2. Ajoute l'intégration avec le second badge (ou *Paramètres →
+   Appareils et services → Ajouter une intégration → GeoRide*).
+
 [![Ouvrir Home Assistant et ajouter ce dépôt à HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=bartolije&repository=georide-ha&category=integration)
 
-[![Ouvrir Home Assistant et ajouter l'intégration GeoRide.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=georide)
+[![Ouvrir Home Assistant et ajouter l'intégration GeoRide.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=georide_ha)
 
-1. Le premier badge ajoute ce dépôt à HACS (ou *HACS → Intégrations →
-   ⋮ → Dépôts personnalisés →* `https://github.com/bartolije/georide-ha`).
-2. Installe **GeoRide** depuis HACS, puis redémarre Home Assistant.
-3. Le second badge ouvre l'ajout de l'intégration (ou *Paramètres →
-   Appareils et services → Ajouter une intégration → GeoRide*).
+Son domaine est `georide_ha` : elle peut cohabiter avec l'autre
+intégration GeoRide du catalogue HACS (`ptimatth/GeorideHA`, ancienne
+API).
 
 Home Assistant 2026.8 ou plus récent est requis.
 
+### Depuis une version 0.17 ou antérieure
+
+La 0.18 change le domaine de l'intégration (`georide` → `georide_ha`)
+pour cohabiter avec l'autre intégration GeoRide. Home Assistant la voit
+comme une nouvelle intégration :
+
+1. **Avant** la mise à jour : *Paramètres → Appareils et services →
+   GeoRide → ⋮ → Supprimer*.
+2. Mets à jour dans HACS. Si le dossier `config/custom_components/georide`
+   existe encore, supprime-le, puis redémarre Home Assistant.
+3. Ajoute de nouveau l'intégration (nouveau code par e-mail). Les
+   entités reprennent les mêmes identifiants, sauf ceux que tu avais
+   renommés à la main : historique, cartes et automatisations sur ces
+   entités restent valables.
+4. Dans tes automatisations, remplace `georide_…_event` par
+   `georide_ha_…_event` et `georide.trip_summary` par
+   `georide_ha.trip_summary`.
+
 ### Installation manuelle (sans HACS)
 
-Copie `custom_components/georide/` dans le dossier
+Copie `custom_components/georide_ha/` dans le dossier
 `config/custom_components/` de Home Assistant, redémarre, puis ajoute
 l'intégration depuis *Paramètres → Appareils et services*.
 
@@ -127,7 +151,7 @@ et les badges toutes les 15 min. L'API v2 n'a pas de canal temps réel
 (l'appli n'ouvre plus l'ancien flux socket.io) : les alarmes arrivent
 dans Home Assistant en une minute environ.
 
-## Service `georide.trip_summary`
+## Service `georide_ha.trip_summary`
 
 Récupère les trajets d'une période et renvoie des statistiques. La
 réponse d'un service se récupère dans un script ou une automatisation
@@ -137,7 +161,7 @@ avec `response_variable:`.
 script:
   georide_30_derniers_jours:
     sequence:
-      - service: georide.trip_summary
+      - service: georide_ha.trip_summary
         data:
           start_date: "{{ (now() - timedelta(days=30)).date() }}"
           end_date: "{{ now().date() }}"
@@ -185,9 +209,9 @@ automatisations.
 
 | Événement | Données (`event_data`) | Déclenché quand |
 |---|---|---|
-| `georide_lock_event` | `device_id`, `tracker_id`, `tracker_name`, `is_locked` | le verrou change d'état. |
-| `georide_moving_event` | `device_id`, `tracker_id`, `tracker_name`, `moving` | la moto se met en mouvement ou s'arrête. |
-| `georide_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type`, `occurred_at`, `source` | à chaque nouvel événement du traceur. `type` est le type GeoRide sans le préfixe `event/` : `vibration/detected`, `movement/detected`, `displacement/detected`, `power/restored`… (types changés avec l'API v2). |
+| `georide_ha_lock_event` | `device_id`, `tracker_id`, `tracker_name`, `is_locked` | le verrou change d'état. |
+| `georide_ha_moving_event` | `device_id`, `tracker_id`, `tracker_name`, `moving` | la moto se met en mouvement ou s'arrête. |
+| `georide_ha_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type`, `occurred_at`, `source` | à chaque nouvel événement du traceur. `type` est le type GeoRide sans le préfixe `event/` : `vibration/detected`, `movement/detected`, `displacement/detected`, `power/restored`… (types changés avec l'API v2). |
 
 ## Exemples d'automatisations
 
@@ -218,7 +242,7 @@ automation:
   - alias: GeoRide - alarme
     trigger:
       platform: event
-      event_type: georide_alarm_event
+      event_type: georide_ha_alarm_event
     action:
       service: notify.mobile_app_mon_telephone
       data:
@@ -288,7 +312,7 @@ débogage :
 logger:
   default: info
   logs:
-    custom_components.georide: debug
+    custom_components.georide_ha: debug
 ```
 
 Pour un instantané complet : *Paramètres → Appareils et services →
@@ -311,7 +335,7 @@ expirée : valide la notification de nouvelle authentification (ou
 ## Qualité
 
 L'intégration déclare l'[échelle de qualité des intégrations Home Assistant](https://developers.home-assistant.io/docs/core/integration-quality-scale/)
-dans [`custom_components/georide/quality_scale.yaml`](custom_components/georide/quality_scale.yaml) :
+dans [`custom_components/georide_ha/quality_scale.yaml`](custom_components/georide_ha/quality_scale.yaml) :
 
 - 🥉 Bronze : **18 / 18** règles
 - 🥈 Argent : **10 / 10** règles

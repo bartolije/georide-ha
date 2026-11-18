@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 _TRANSLATIONS = (
-    Path(__file__).parent.parent / "custom_components" / "georide" / "translations"
+    Path(__file__).parent.parent / "custom_components" / "georide_ha" / "translations"
 )
 
 

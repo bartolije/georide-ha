@@ -31,21 +31,21 @@ from homeassistant.exceptions import HomeAssistantError  # noqa: E402
 from homeassistant.helpers import device_registry as dr  # noqa: E402
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC  # noqa: E402
 
-from custom_components.georide.api import (  # noqa: E402
+from custom_components.georide_ha.api import (  # noqa: E402
     GeoRideAuthError,
     GeoRideConnectionError,
     GeoRideError,
 )
-from custom_components.georide.binary_sensor import (  # noqa: E402
+from custom_components.georide_ha.binary_sensor import (  # noqa: E402
     BEACON_BINARY_SENSORS,
     BINARY_SENSORS,
     GeoRideBeaconBinarySensor,
     GeoRideBinarySensor,
 )
-from custom_components.georide.const import DOMAIN  # noqa: E402
-from custom_components.georide.device_tracker import GeoRideDeviceTracker  # noqa: E402
-from custom_components.georide.lock import GeoRideLock  # noqa: E402
-from custom_components.georide.sensor import (  # noqa: E402
+from custom_components.georide_ha.const import DOMAIN  # noqa: E402
+from custom_components.georide_ha.device_tracker import GeoRideDeviceTracker  # noqa: E402
+from custom_components.georide_ha.lock import GeoRideLock  # noqa: E402
+from custom_components.georide_ha.sensor import (  # noqa: E402
     BEACON_SENSORS,
     LAST_TRIP_SENSORS,
     SENSORS,
@@ -54,7 +54,7 @@ from custom_components.georide.sensor import (  # noqa: E402
     GeoRideMaintenanceSensor,
     GeoRideSensor,
 )
-from custom_components.georide.switch import GeoRideEcoModeSwitch  # noqa: E402
+from custom_components.georide_ha.switch import GeoRideEcoModeSwitch  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -624,7 +624,7 @@ class TestEcoModeSwitch:
 # async_setup_entry for every platform — exercises the `_async_add_new`
 # closures and the coordinator listener registration code.
 # ---------------------------------------------------------------------------
-from custom_components.georide import (  # noqa: E402
+from custom_components.georide_ha import (  # noqa: E402
     binary_sensor as bs_module,
     device_tracker as dt_module,
     lock as lock_module,

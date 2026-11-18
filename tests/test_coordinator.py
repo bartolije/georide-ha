@@ -13,18 +13,18 @@ from homeassistant.helpers import issue_registry as ir  # noqa: E402
 from homeassistant.helpers.update_coordinator import UpdateFailed  # noqa: E402
 from pytest_homeassistant.common import MockConfigEntry  # noqa: E402
 
-from custom_components.georide.api import (  # noqa: E402
+from custom_components.georide_ha.api import (  # noqa: E402
     GeoRideAuthError,
     GeoRideConnectionError,
     GeoRideError,
 )
-from custom_components.georide.const import (  # noqa: E402
+from custom_components.georide_ha.const import (  # noqa: E402
     DOMAIN,
     EVENT_ALARM,
     EVENT_LOCK,
     EVENT_MOVING,
 )
-from custom_components.georide.coordinator import (  # noqa: E402
+from custom_components.georide_ha.coordinator import (  # noqa: E402
     LAST_TRIPS_INITIAL_LOOKBACK,
     LAST_TRIPS_LOOKBACK,
     GeoRideCoordinator,
@@ -404,7 +404,7 @@ class TestStaleMaintenanceCleanup:
     async def test_v1_maintenance_entities_removed_v2_kept(self, hass):
         from homeassistant.helpers import entity_registry as er
 
-        from custom_components.georide import _cleanup_stale_maintenance
+        from custom_components.georide_ha import _cleanup_stale_maintenance
 
         entry = _make_entry(hass)
         registry = er.async_get(hass)

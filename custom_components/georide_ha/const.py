@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from homeassistant.const import Platform
 
-DOMAIN = "georide"
+DOMAIN = "georide_ha"
 MANUFACTURER = "GeoRide"
 
 PLATFORMS: list[Platform] = [

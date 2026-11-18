@@ -236,7 +236,7 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
                 ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     async def _poll_events(self, trackers: TrackersById) -> None:
-        """Fire `georide_alarm_event` for each tracker event newer than the last poll.
+        """Fire `georide_ha_alarm_event` for each tracker event newer than the last poll.
 
         The first poll only records where we are, so a restart doesn't replay
         old alarms. Types are the v2 kinds without the `event/` prefix, e.g.

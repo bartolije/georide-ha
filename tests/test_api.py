@@ -14,7 +14,7 @@ import pytest
 from aiohttp import ClientError
 from multidict import CIMultiDict
 
-from custom_components.georide.api import (
+from custom_components.georide_ha.api import (
     SESSION_COOKIE,
     GeoRideApiClient,
     GeoRideAuthError,

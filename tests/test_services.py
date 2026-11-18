@@ -1,4 +1,4 @@
-"""Tests for the georide.trip_summary service."""
+"""Tests for the georide_ha.trip_summary service."""
 from __future__ import annotations
 
 import pytest
@@ -14,13 +14,13 @@ from homeassistant.const import CONF_EMAIL, CONF_TOKEN  # noqa: E402
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError  # noqa: E402
 from pytest_homeassistant.common import MockConfigEntry  # noqa: E402
 
-from custom_components.georide import services  # noqa: E402
-from custom_components.georide.api import (  # noqa: E402
+from custom_components.georide_ha import services  # noqa: E402
+from custom_components.georide_ha.api import (  # noqa: E402
     GeoRideAuthError,
     GeoRideConnectionError,
     GeoRideError,
 )
-from custom_components.georide.const import DOMAIN  # noqa: E402
+from custom_components.georide_ha.const import DOMAIN  # noqa: E402
 
 
 def _trip(**overrides):

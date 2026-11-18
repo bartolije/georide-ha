@@ -17,7 +17,7 @@ import pytest
 if sys.version_info < (3, 11):
     pytest.skip("models requires Python 3.11+", allow_module_level=True)
 
-from custom_components.georide import models  # noqa: E402
+from custom_components.georide_ha import models  # noqa: E402
 
 
 class TestTypedDictsExist:

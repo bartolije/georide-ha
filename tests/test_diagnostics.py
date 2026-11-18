@@ -12,8 +12,8 @@ from homeassistant.const import CONF_EMAIL, CONF_TOKEN  # noqa: E402
 from homeassistant.helpers import device_registry as dr  # noqa: E402
 from pytest_homeassistant.common import MockConfigEntry  # noqa: E402
 
-from custom_components.georide import diagnostics  # noqa: E402
-from custom_components.georide.const import DOMAIN  # noqa: E402
+from custom_components.georide_ha import diagnostics  # noqa: E402
+from custom_components.georide_ha.const import DOMAIN  # noqa: E402
 
 
 def _mock_coordinator(trackers):

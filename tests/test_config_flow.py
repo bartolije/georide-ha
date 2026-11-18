@@ -22,13 +22,13 @@ from homeassistant.const import CONF_EMAIL, CONF_TOKEN
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant.common import MockConfigEntry
 
-from custom_components.georide.api import (
+from custom_components.georide_ha.api import (
     GeoRideAuthError,
     GeoRideConnectionError,
     GeoRideError,
 )
-from custom_components.georide.config_flow import CONF_OTP
-from custom_components.georide.const import DOMAIN
+from custom_components.georide_ha.config_flow import CONF_OTP
+from custom_components.georide_ha.const import DOMAIN
 
 EMAIL = "rider@example.com"
 CODE = "123456"
@@ -65,14 +65,14 @@ def _mock_client(*, verify_return=TOKEN, verify_raises=None, send_raises=None, t
         return client
 
     with patch(
-        "custom_components.georide.config_flow.GeoRideApiClient", side_effect=_factory
+        "custom_components.georide_ha.config_flow.GeoRideApiClient", side_effect=_factory
     ), patch(
-        "custom_components.georide.GeoRideApiClient", side_effect=_factory
+        "custom_components.georide_ha.GeoRideApiClient", side_effect=_factory
     ), patch(
-        "custom_components.georide.config_flow.async_create_clientsession",
+        "custom_components.georide_ha.config_flow.async_create_clientsession",
         return_value=MagicMock(),
     ), patch(
-        "custom_components.georide.async_create_clientsession",
+        "custom_components.georide_ha.async_create_clientsession",
         return_value=MagicMock(),
     ):
         yield clients
