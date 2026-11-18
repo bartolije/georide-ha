@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 
 import aiohttp
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import CONF_TOKEN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
@@ -12,6 +12,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import IntegrationNotFound, async_get_integration
 
 from .api import GeoRideApiClient
 from .const import DOMAIN, PLATFORMS
@@ -19,6 +20,22 @@ from .coordinator import GeoRideCoordinator
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
+
+# 0.18 renames the domain to georide_ha (to sit next to ptimatth/GeorideHA in
+# HACS), and HACS installs it next to this folder. Once it is there, this code
+# hands its entries over: georide_ha moves the devices and entities, so users
+# keep entity_ids, history and automations without re-adding anything.
+NEW_DOMAIN = "georide_ha"
+_handed_over: set[str] = set()
+
+
+async def _new_domain_installed(hass: HomeAssistant) -> bool:
+    try:
+        await async_get_integration(hass, NEW_DOMAIN)
+    except IntegrationNotFound:
+        return False
+    return True
+
 
 # Set up from the UI only; async_setup exists just to register the services.
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -32,12 +49,23 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     is idempotent so calling this for the first entry, then for subsequent
     ones, has no extra cost.
     """
-    await async_setup_services(hass)
+    if not await _new_domain_installed(hass):  # georide_ha keeps the service name itself
+        await async_setup_services(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up GeoRide from a config entry: build the coordinator, fan out platforms."""
+    if await _new_domain_installed(hass):
+        # No platforms: georide_ha can only move entities that are not loaded.
+        _handed_over.add(entry.entry_id)
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                NEW_DOMAIN, context={"source": SOURCE_IMPORT}, data={"entry_id": entry.entry_id}
+            )
+        )
+        return True
+
     # Own session without cookie jar: the session cookie is sent explicitly,
     # so two GeoRide accounts can't leak into each other through a shared jar.
     session = async_create_clientsession(hass, cookie_jar=aiohttp.DummyCookieJar())
@@ -76,6 +104,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    if entry.entry_id in _handed_over:
+        return True
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
