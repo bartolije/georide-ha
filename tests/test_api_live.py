@@ -16,7 +16,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from georide.api import GeoRideApiClient
+from georide_ha.api import GeoRideApiClient
 
 
 pytestmark = pytest.mark.live

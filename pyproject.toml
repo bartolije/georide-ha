@@ -13,6 +13,6 @@ filterwarnings = [
 
 [tool.mypy]
 strict = true
-files = ["custom_components/georide"]
+files = ["custom_components/georide_ha"]
 exclude = ["tests/", "lovelace/"]
 python_version = "3.14"

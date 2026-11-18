@@ -25,7 +25,7 @@ jobs:
           ref: ${{ env.TAG }}
 
       - name: Build georide.zip and attach it to the release
-        working-directory: custom_components/georide
+        working-directory: custom_components/georide_ha
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

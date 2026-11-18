@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.georide import stats
+from custom_components.georide_ha import stats
 
 
 def _trip(**overrides):

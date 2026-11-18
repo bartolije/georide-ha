@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from custom_components.georide import helpers
+from custom_components.georide_ha import helpers
 
 
 class TestMetersToKm:

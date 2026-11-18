@@ -31,7 +31,7 @@ except ImportError:
     _HA_NATIVE = False
 
 # ---------------------------------------------------------------------------
-# 2. Without HA, install a minimal shim so `from georide.api import X` works
+# 2. Without HA, install a minimal shim so `from georide_ha.api import X` works
 # ---------------------------------------------------------------------------
 if not _HA_NATIVE:
     if "homeassistant" not in sys.modules:
@@ -51,24 +51,24 @@ if not _HA_NATIVE:
         _ha_const.Platform = _Platform
         sys.modules["homeassistant.const"] = _ha_const
 
-    _GR_DIR = Path(__file__).parent.parent / "custom_components" / "georide"
+    _GR_DIR = Path(__file__).parent.parent / "custom_components" / "georide_ha"
 
-    _legacy_pkg = types.ModuleType("georide")
+    _legacy_pkg = types.ModuleType("georide_ha")
     _legacy_pkg.__path__ = [str(_GR_DIR)]
-    sys.modules["georide"] = _legacy_pkg
+    sys.modules["georide_ha"] = _legacy_pkg
 
     if "custom_components" not in sys.modules:
         sys.modules["custom_components"] = types.ModuleType("custom_components")
-    _cc_pkg = types.ModuleType("custom_components.georide")
+    _cc_pkg = types.ModuleType("custom_components.georide_ha")
     _cc_pkg.__path__ = [str(_GR_DIR)]
-    sys.modules["custom_components.georide"] = _cc_pkg
+    sys.modules["custom_components.georide_ha"] = _cc_pkg
 
     def _load(submod: str) -> types.ModuleType:
-        name = f"custom_components.georide.{submod}"
+        name = f"custom_components.georide_ha.{submod}"
         spec = importlib.util.spec_from_file_location(name, _GR_DIR / f"{submod}.py")
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
-        sys.modules[f"georide.{submod}"] = module
+        sys.modules[f"georide_ha.{submod}"] = module
         spec.loader.exec_module(module)
         setattr(_cc_pkg, submod, module)
         setattr(_legacy_pkg, submod, module)
@@ -79,13 +79,13 @@ if not _HA_NATIVE:
     _load("stats")
     _load("api")
 
-    # `patch("custom_components.georide.X")` needs to traverse the parent
+    # `patch("custom_components.georide_ha.X")` needs to traverse the parent
     # module's attributes — make sure the shim exposes them that way too.
-    sys.modules["custom_components"].georide = _cc_pkg  # type: ignore[attr-defined]
+    sys.modules["custom_components"].georide_ha = _cc_pkg  # type: ignore[attr-defined]
 
 # When HA is native, the path is set by pyproject's `pythonpath` and
-# `from georide.api import X` works through the normal import system.
-from georide.api import GeoRideApiClient  # noqa: E402
+# `from georide_ha.api import X` works through the normal import system.
+from georide_ha.api import GeoRideApiClient  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # 3. Credentials loader (for live tests)
