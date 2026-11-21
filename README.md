@@ -54,16 +54,31 @@ Home Assistant 2026.8 ou plus récent est requis.
 ### Depuis une version 0.17
 
 La 0.18 change le domaine de l'intégration (`georide` → `georide_ha`)
-pour cohabiter avec l'autre intégration GeoRide. **Rien à faire depuis
-la 0.17.7** : après la mise à jour et le redémarrage, la 0.18 reprend ton
-compte, tes appareils et tes entités (mêmes identifiants, historique
-conservé), garde les anciens noms d'événements (`georide_…_event`) et de
-service (`georide.trip_summary`) pour tes automatisations, puis supprime
-l'ancien dossier `custom_components/georide`.
+pour cohabiter avec l'autre intégration GeoRide.
 
-Si tu passes directement d'une version plus ancienne à la 0.18, ajoute
-simplement l'intégration GeoRide (nouveau code par e-mail) : elle
-reprend l'ancienne installation de la même façon.
+**Avec HACS, rien à faire depuis la 0.17.7** : après la mise à jour et le
+redémarrage, la 0.18 reprend ton compte, tes appareils et tes entités
+(mêmes identifiants, historique conservé), garde les anciens noms
+d'événements (`georide_…_event`) et de service (`georide.trip_summary`)
+pour tes automatisations, puis supprime l'ancien dossier
+`custom_components/georide`. Si tu passes directement d'une version plus
+ancienne à la 0.18, ajoute simplement l'intégration GeoRide (nouveau code
+par e-mail) : elle reprend l'ancienne installation de la même façon.
+
+**Avec le Marketplace intégré à Home Assistant** (qui remplace HACS), la
+mise à jour est refusée (« bartolije/georide-ha changed its domain from
+georide to georide_ha, uninstall it and install it again »). Dans ce cas :
+
+1. *Paramètres → Appareils et services → GeoRide → Supprimer*.
+2. Dans le Marketplace, désinstalle GeoRide puis réinstalle-le (0.18),
+   et redémarre Home Assistant.
+3. Ajoute l'intégration GeoRide (nouveau code par e-mail).
+
+Les entités reviennent normalement avec les mêmes identifiants (`sensor.<moto>_…`) et
+leur historique, sauf celles que tu avais renommées. À adapter dans tes
+automatisations : celles qui ciblent un appareil (et non une entité),
+les événements `georide_…_event` (devenus `georide_ha_…_event`) et le
+service `georide.trip_summary` (devenu `georide_ha.trip_summary`).
 
 ### Installation manuelle (sans HACS)
 
