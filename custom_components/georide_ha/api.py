@@ -282,8 +282,9 @@ class GeoRideApiClient:
             raise GeoRideConnectionError(str(err)) from err
         if resp.status in (401, 403):
             raise GeoRideAuthError(f"Session rejected by GeoRide (HTTP {resp.status})")
-        if resp.status == 422 and code == "TRACKER_FEATURE_NOT_SUPPORTED":
-            raise GeoRideNotSupportedError(path)
+        # Some tracker models answer 404 instead of 422 on a feature they lack (/manual-lock, issue #3)
+        if (resp.status, code) in ((422, "TRACKER_FEATURE_NOT_SUPPORTED"), (404, "RESOURCE_NOT_FOUND")):
+            raise GeoRideNotSupportedError(f"HTTP {resp.status} {code} on {method} {path}")
         if resp.status >= 500:
             raise GeoRideConnectionError(f"HTTP {resp.status} on {path}")
         raise GeoRideError(f"HTTP {resp.status} {code or ''} on {method} {path}".strip())

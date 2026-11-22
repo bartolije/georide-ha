@@ -176,6 +176,7 @@ class TestErrors:
             (500, None, GeoRideConnectionError),
             (422, {"code": "VALIDATION_FAILED"}, GeoRideError),
             (422, {"code": "TRACKER_FEATURE_NOT_SUPPORTED"}, GeoRideNotSupportedError),
+            (404, {"code": "RESOURCE_NOT_FOUND"}, GeoRideNotSupportedError),
             (404, {"code": "NOT_FOUND"}, GeoRideError),
         ],
     )
@@ -224,6 +225,13 @@ class TestGetTrackers:
         client, _ = _client(_tracker_routes({("GET", f"/v1/trackers/{TID}/manual-lock"): _resp(200, {"enabled": True})}))
         [tracker] = await client.get_trackers()
         assert tracker["canLock"] is True and tracker["isLocked"] is True
+
+    async def test_manual_lock_404_is_unsupported(self):
+        # issue #3: login failed on HTTP 404 RESOURCE_NOT_FOUND on /manual-lock
+        missing = _resp(404, {"code": "RESOURCE_NOT_FOUND", "status": 404})
+        client, _ = _client(_tracker_routes({("GET", f"/v1/trackers/{TID}/manual-lock"): missing}))
+        [tracker] = await client.get_trackers()
+        assert tracker["canLock"] is False and tracker["isLocked"] is None
 
     async def test_unsupported_feature_not_asked_twice(self):
         client, session = _client(_tracker_routes())
