@@ -44,6 +44,8 @@ if not _HA_NATIVE:
             BINARY_SENSOR = "binary_sensor"
             DEVICE_TRACKER = "device_tracker"
             LOCK = "lock"
+            NUMBER = "number"
+            UPDATE = "update"
             SENSOR = "sensor"
             SIREN = "siren"
             SWITCH = "switch"

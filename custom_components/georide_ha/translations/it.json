@@ -20,7 +20,8 @@
         "title": "GeoRide — inserisci il codice",
         "description": "Inserisci il codice che GeoRide ha appena inviato a {email}.",
         "data": {
-          "otp": "Codice"
+          "otp": "Codice",
+          "resend": "Inviami un nuovo codice"
         }
       }
     },
@@ -39,6 +40,11 @@
   "entity": {
     "binary_sensor": {
       "moving": { "name": "In movimento" },
+      "plugged": { "name": "Alimentazione collegata" },
+      "online": { "name": "Localizzatore online" },
+      "maintenance_mode": { "name": "Modalità manutenzione" },
+      "emergency_call": { "name": "Chiamata d'emergenza" },
+      "friend_call": { "name": "Chiamata ai familiari" },
       "stolen": { "name": "Rubata" },
       "crashed": { "name": "Caduta rilevata" },
       "has_beacon": { "name": "Beacon associato" },
@@ -52,6 +58,8 @@
       "altitude": { "name": "Altitudine" },
       "external_battery_voltage": { "name": "Tensione batteria esterna" },
       "internal_battery_voltage": { "name": "Tensione batteria interna" },
+      "internal_battery": { "name": "Batteria del localizzatore" },
+      "vibration_sensitivity": { "name": "Sensibilità alle vibrazioni" },
       "subscription_expires": { "name": "Scadenza abbonamento" },
       "last_trip_end": { "name": "Fine dell'ultimo viaggio" },
       "last_trip_distance": { "name": "Distanza dell'ultimo viaggio" },
@@ -63,10 +71,28 @@
       "beacon_last_seen": { "name": "Ultimo report batteria" }
     },
     "switch": {
-      "eco_mode": { "name": "Modalità eco" }
+      "eco_mode": { "name": "Modalità eco" },
+      "fall_detector": { "name": "Rilevatore di caduta" },
+      "sleep_mode": { "name": "Modalità riposo" }
+    },
+    "number": {
+      "cutoff_voltage": { "name": "Tensione di interruzione batteria" }
+    },
+    "update": {
+      "firmware": { "name": "Firmware" },
+      "ble_firmware": { "name": "Firmware Bluetooth" }
     }
   },
   "exceptions": {
+    "update_failed": {
+      "message": "Impossibile aggiornare i dati GeoRide: {error}"
+    },
+    "auth_failed": {
+      "message": "Sessione GeoRide scaduta o rifiutata: {error}"
+    },
+    "legacy_entry_busy": {
+      "message": "In attesa che la vecchia voce GeoRide {title} finisca di caricarsi"
+    },
     "token_rejected": {
       "message": "GeoRide ha rifiutato il token salvato: {error}"
     },
@@ -88,8 +114,8 @@
   },
   "issues": {
     "subscription_expiring": {
-      "title": "L'abbonamento GeoRide sta per scadere",
-      "description": "L'abbonamento GeoRide di **{tracker_name}** scade il **{expires}**. Rinnovalo prima su georide.fr per mantenere il tracciamento, gli allarmi e il blocco a distanza."
+      "title": "Abbonamento GeoRide da rinnovare",
+      "description": "L'abbonamento GeoRide di **{tracker_name}** termina o è terminato il **{expires}**. Rinnovalo su georide.fr per mantenere localizzazione, avvisi e blocco remoto."
     }
   },
   "services": {
@@ -99,11 +125,11 @@
       "fields": {
         "start_date": {
           "name": "Data di inizio",
-          "description": "Primo giorno, incluso (UTC)."
+          "description": "Primo giorno, incluso (fuso orario di Home Assistant)."
         },
         "end_date": {
           "name": "Data di fine",
-          "description": "Ultimo giorno, incluso (UTC)."
+          "description": "Ultimo giorno, incluso (fuso orario di Home Assistant)."
         },
         "tracker_id": {
           "name": "ID tracker",

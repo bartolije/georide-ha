@@ -1,0 +1,54 @@
+name: Signaler un problème
+description: L'intégration ne se connecte pas, une entité manque ou affiche une valeur fausse.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Merci ! Ces quelques informations évitent presque toujours un aller-retour.
+  - type: textarea
+    id: what
+    attributes:
+      label: Que se passe-t-il ?
+      description: Ce que tu as fait, ce que tu attendais, ce qui s'est passé.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version de l'intégration
+      description: "Paramètres → Appareils et services → GeoRide (ex. 0.18.2)."
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Version de Home Assistant
+      placeholder: "2026.11.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Modèle(s) de traceur
+      multiple: true
+      options: [GeoRide 1, GeoRide Mini, GeoRide 3, GeoRide 3S, GeoRide 4, Autre / je ne sais pas]
+    validations:
+      required: true
+  - type: dropdown
+    id: shared
+    attributes:
+      label: La moto concernée est…
+      options: [à mon nom, partagée avec moi par quelqu'un d'autre, les deux (plusieurs motos)]
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Journal
+      description: "Paramètres → Système → Journaux, cherche « georide », ouvre chaque ligne et colle le détail."
+      render: text
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: "Paramètres → Appareils et services → GeoRide → ⋮ → Télécharger les diagnostics, puis glisse le fichier ici. La session, l'e-mail et les positions GPS y sont masqués."

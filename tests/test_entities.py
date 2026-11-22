@@ -54,7 +54,13 @@ from custom_components.georide_ha.sensor import (  # noqa: E402
     GeoRideMaintenanceSensor,
     GeoRideSensor,
 )
-from custom_components.georide_ha.switch import GeoRideEcoModeSwitch  # noqa: E402
+from custom_components.georide_ha.number import GeoRideCutoffVoltage  # noqa: E402
+from custom_components.georide_ha.switch import (  # noqa: E402
+    SETTING_SWITCHES,
+    GeoRideEcoModeSwitch,
+    GeoRideSettingSwitch,
+)
+from custom_components.georide_ha.update import UPDATES, GeoRideFirmwareUpdate  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -110,13 +116,6 @@ MAINT_KM = {
     "todo": 600_000,
     "dateUnitType": None,
 }
-MAINT_YEARS = {
-    "id": 44,
-    "trackerId": TID,
-    "name": "Personnalise",
-    "todo": 8760,  # hours = 1 year
-    "dateUnitType": "years",
-}
 MAINT_BAD = {
     "id": 45,
     "trackerId": TID,
@@ -141,6 +140,7 @@ def _coordinator(
     coord.last_trips = last_trips if last_trips is not None else {}
     coord.client = client or AsyncMock()
     coord.async_request_refresh = AsyncMock()
+    coord.uid_base = lambda tid: str(tid)
     return coord
 
 
@@ -229,9 +229,19 @@ class TestTrackerSensors:
     def test_speed_absent_in_v2_is_unavailable(self):
         coord = _coordinator()
         coord.data[TID].pop("speed", None)
-        s = GeoRideSensor(coord, TID, _desc_by_key(SENSORS, "speed"))
+        desc = _desc_by_key(SENSORS, "speed")
+        s = GeoRideSensor(coord, TID, desc)
         assert s.native_value is None
         assert s.available is False
+        assert desc.entity_registry_enabled_default is False
+
+    def test_tracker_internal_battery_percent(self):
+        coord = _coordinator(trackers=[{**TRACKER, "internalBatteryLevel": 100}])
+        desc = _desc_by_key(SENSORS, "internal_battery")
+        s = GeoRideSensor(coord, TID, desc)
+        assert s.native_value == 100
+        assert desc.native_unit_of_measurement == PERCENTAGE
+        assert desc.entity_category == EntityCategory.DIAGNOSTIC
 
     def test_battery_level_from_voltage(self):
         coord = _coordinator()
@@ -390,14 +400,6 @@ class TestMaintenanceSensors:
         assert s.native_unit_of_measurement == UnitOfLength.KILOMETERS
         assert s.device_class == SensorDeviceClass.DISTANCE
 
-    def test_years_item_hours_to_days(self):
-        coord = _coordinator(maintenance={TID: [MAINT_YEARS]})
-        s = GeoRideMaintenanceSensor(coord, TID, MAINT_YEARS["id"])
-        # 8760 hours / 24 = 365 days
-        assert s.native_value == 365.0
-        assert s.native_unit_of_measurement == UnitOfTime.DAYS
-        assert s.device_class == SensorDeviceClass.DURATION
-
     def test_non_numeric_todo_returns_none(self):
         coord = _coordinator(maintenance={TID: [MAINT_BAD]})
         s = GeoRideMaintenanceSensor(coord, TID, MAINT_BAD["id"])
@@ -436,6 +438,15 @@ class TestBeaconSensors:
         s = GeoRideBeaconSensor(coord, TID, BEACON["id"], _desc_by_key(BEACON_SENSORS, "last_seen"))
         assert s.native_value == datetime(2026, 5, 10, 8, 0, 0, tzinfo=timezone.utc)
 
+    def test_last_seen_unavailable_without_v2_source(self):
+        # Real v2 beacon keys: no lastBatteryLevelUpdate.
+        v2 = {k: v for k, v in BEACON.items() if k != "lastBatteryLevelUpdate"}
+        coord = _coordinator(beacons={TID: [v2]})
+        desc = _desc_by_key(BEACON_SENSORS, "last_seen")
+        s = GeoRideBeaconSensor(coord, TID, v2["id"], desc)
+        assert s.available is False
+        assert desc.entity_registry_enabled_default is False
+
 
 # ---------------------------------------------------------------------------
 # Tracker binary sensors
@@ -456,6 +467,25 @@ class TestTrackerBinarySensors:
         coord = _coordinator()
         s = GeoRideBinarySensor(coord, TID, _desc_by_key(BINARY_SENSORS, "stolen"))
         assert s.is_on is False
+
+    def test_stolen_without_v2_source_is_unavailable_and_disabled(self):
+        coord = _coordinator(trackers=[{k: v for k, v in TRACKER.items() if k != "isStolen"}])
+        desc = _desc_by_key(BINARY_SENSORS, "stolen")
+        s = GeoRideBinarySensor(coord, TID, desc)
+        assert s.available is False
+
+    def test_stolen_on_while_a_theft_is_declared(self):
+        coord = _coordinator(trackers=[{**TRACKER, "isStolen": True}])
+        s = GeoRideBinarySensor(coord, TID, _desc_by_key(BINARY_SENSORS, "stolen"))
+        assert s.is_on is True and s.available is True
+
+    @pytest.mark.parametrize(("plugged", "on"), [(True, True), (False, False)])
+    def test_power_plugged(self, plugged, on):
+        coord = _coordinator(trackers=[{**TRACKER, "isPlugged": plugged}])
+        desc = _desc_by_key(BINARY_SENSORS, "plugged")
+        s = GeoRideBinarySensor(coord, TID, desc)
+        assert s.is_on is on and s.available is True
+        assert desc.device_class == BinarySensorDeviceClass.PLUG
 
     def test_crashed_off(self):
         coord = _coordinator()
@@ -619,6 +649,98 @@ class TestEcoModeSwitch:
         with pytest.raises(HomeAssistantError):
             await sw.async_turn_on()
 
+    async def test_requested_mode_shown_until_applied(self):
+        """GeoRide applies the mode at the tracker's next connection: no flip back meanwhile."""
+        coord = _coordinator()  # isInEco False
+        coord.client.eco_mode_on = AsyncMock(return_value="2099-01-01T04:57:00.000Z")
+        sw = GeoRideEcoModeSwitch(coord, TID)
+        sw.async_write_ha_state = MagicMock()
+        await sw.async_turn_on()
+        sw._handle_coordinator_update()  # refresh still reads the old mode
+        assert sw.is_on is True
+        assert sw.extra_state_attributes == {"pending_until": "2099-01-01T04:57:00+00:00"}
+
+        coord.data[TID] = {**coord.data[TID], "isInEco": True}  # tracker applied it
+        sw._handle_coordinator_update()
+        assert sw.is_on is True and sw.extra_state_attributes is None
+
+    async def test_request_long_overdue_shows_actual_mode(self):
+        coord = _coordinator()
+        coord.client.eco_mode_on = AsyncMock(return_value="2020-01-01T00:00:00Z")
+        sw = GeoRideEcoModeSwitch(coord, TID)
+        sw.async_write_ha_state = MagicMock()
+        await sw.async_turn_on()
+        sw._handle_coordinator_update()
+        assert sw.is_on is False
+
+
+class TestSettingsEntities:
+    FULL = {**TRACKER, "firmwareVersion": 50, "firmwareLatest": 51, "bleFirmwareVersion": 5, "bleFirmwareLatest": 5,
+            "cutoffVoltage": 12.25, "fallDetector": True, "sleepMode": False, "sleepModePending": None, "online": True}
+
+    def test_firmware_update_available(self):
+        coord = _coordinator(trackers=[self.FULL])
+        stm = GeoRideFirmwareUpdate(coord, TID, _desc_by_key(UPDATES, "firmware"))
+        ble = GeoRideFirmwareUpdate(coord, TID, _desc_by_key(UPDATES, "ble_firmware"))
+        assert (stm.installed_version, stm.latest_version, stm.state) == ("50", "51", "on")
+        assert ble.state == "off"
+        assert stm.device_info["sw_version"] == "50"
+
+    async def test_cutoff_voltage_value_and_set(self):
+        coord = _coordinator(trackers=[self.FULL])
+        n = GeoRideCutoffVoltage(coord, TID)
+        assert n.native_value == 12.25 and (n.native_min_value, n.native_max_value) == (11.0, 16.0)
+        await n.async_set_native_value(12.5)
+        coord.client.set_cutoff_voltage.assert_awaited_once_with(TID, 12.5)
+        coord.async_request_refresh.assert_awaited_once()
+
+    async def test_cutoff_voltage_refused_by_georide(self):
+        coord = _coordinator(trackers=[self.FULL])
+        coord.client.set_cutoff_voltage = AsyncMock(side_effect=GeoRideError("HTTP 422 VALIDATION_FAILED"))
+        with pytest.raises(HomeAssistantError):
+            await GeoRideCutoffVoltage(coord, TID).async_set_native_value(15.9)
+
+    async def test_setting_switches(self):
+        coord = _coordinator(trackers=[self.FULL])
+        fall = GeoRideSettingSwitch(coord, TID, _desc_by_key(SETTING_SWITCHES, "fall_detector"))
+        sleep = GeoRideSettingSwitch(coord, TID, _desc_by_key(SETTING_SWITCHES, "sleep_mode"))
+        assert fall.is_on is True and fall.extra_state_attributes is None
+        assert sleep.is_on is False and sleep.extra_state_attributes == {"pending": None}
+        await fall.async_turn_off()
+        await sleep.async_turn_on()
+        coord.client.set_fall_detector.assert_awaited_once_with(TID, False)
+        coord.client.set_sleep_mode.assert_awaited_once_with(TID, True)
+
+    async def test_setting_switch_error_is_translated(self):
+        coord = _coordinator(trackers=[self.FULL])
+        coord.client.set_sleep_mode = AsyncMock(side_effect=GeoRideAuthError("401"))
+        sw = GeoRideSettingSwitch(coord, TID, _desc_by_key(SETTING_SWITCHES, "sleep_mode"))
+        with pytest.raises(HomeAssistantError) as err:
+            await sw.async_turn_off()
+        assert err.value.translation_key == "token_rejected"
+
+    def test_online_connectivity(self):
+        coord = _coordinator(trackers=[self.FULL])
+        desc = _desc_by_key(BINARY_SENSORS, "online")
+        assert GeoRideBinarySensor(coord, TID, desc).is_on is True
+        assert desc.device_class == BinarySensorDeviceClass.CONNECTIVITY
+
+    async def test_platforms_skip_trackers_without_the_feature(self, hass):
+        """GeoRide 1 / shared vehicle: no value read, no entity."""
+        from custom_components.georide_ha import number as number_module, update as update_module
+
+        entry, _ = await _entry_with_coord(hass)  # TRACKER has none of the settings
+        for module in (number_module, update_module):
+            added: list = []
+            await module.async_setup_entry(hass, entry, lambda items: added.extend(items))
+            assert added == []
+        entry2, _ = await _entry_with_coord(hass, trackers=[self.FULL])
+        added = []
+        await update_module.async_setup_entry(hass, entry2, lambda items: added.extend(items))
+        await number_module.async_setup_entry(hass, entry2, lambda items: added.extend(items))
+        await switch_module.async_setup_entry(hass, entry2, lambda items: added.extend(items))
+        assert len(added) == 2 + 1 + 3  # firmware x2, cutoff, eco + fall + sleep
+
 
 # ---------------------------------------------------------------------------
 # async_setup_entry for every platform — exercises the `_async_add_new`
@@ -714,3 +836,10 @@ class TestSetupEntry:
         await switch_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
         assert len(added) == 1
         assert isinstance(added[0], GeoRideEcoModeSwitch)
+
+    async def test_switch_setup_skips_tracker_without_modes(self, hass):
+        """GeoRide 1 / Mini: no mode read, no eco switch."""
+        entry, _ = await _entry_with_coord(hass, trackers=[{**TRACKER, "isInEco": None}])
+        added: list = []
+        await switch_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
+        assert added == []

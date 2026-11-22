@@ -1,0 +1,22 @@
+name: Proposer une amélioration
+description: Une donnée ou une commande de l'appli GeoRide que tu voudrais dans Home Assistant.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Qu'est-ce qui te manque ?
+      description: Dis à quoi ça te servirait (automatisation, tableau de bord…).
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: Où est-ce dans l'appli GeoRide ?
+      description: L'écran ou le réglage correspondant, si tu le connais.
+  - type: dropdown
+    id: model
+    attributes:
+      label: Modèle(s) de traceur
+      multiple: true
+      options: [GeoRide 1, GeoRide Mini, GeoRide 3, GeoRide 3S, GeoRide 4, Autre / je ne sais pas]

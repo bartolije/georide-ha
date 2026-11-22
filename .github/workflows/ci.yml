@@ -39,3 +39,11 @@ jobs:
           pip install pytest-homeassistant pytest-cov
       - name: Run tests excluding live
         run: python -m pytest tests/ -m "not live" --cov=custom_components/georide_ha --cov-report=term
+
+  card:
+    name: Lovelace card syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # A syntax error ships a card that never loads; parse it as the module it is.
+      - run: cp lovelace/georide-card.js /tmp/card.mjs && node --check /tmp/card.mjs

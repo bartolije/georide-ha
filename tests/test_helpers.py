@@ -15,8 +15,8 @@ class TestMetersToKm:
             (34_298_150, 34298.15),  # real ZX-10R odometer (m)
             (1500, 1.5),
             (1001, 1.0),
-            (1000, 1000.0),  # threshold is strict >, so 1000 stays
-            (500, 500.0),
+            (1000, 1.0),
+            (900, 0.9),  # a short trip is meters too, never km
             (0, 0.0),
             (0.0, 0.0),
         ],

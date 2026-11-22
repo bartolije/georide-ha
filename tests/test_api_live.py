@@ -21,55 +21,44 @@ from georide_ha.api import GeoRideApiClient
 
 pytestmark = pytest.mark.live
 
-
-async def test_get_trackers_returns_list(authed_client: GeoRideApiClient) -> None:
-    trackers = await authed_client.get_trackers()
-    assert isinstance(trackers, list)
-
-    if not trackers:
-        pytest.skip("Account has no trackers; remaining live tests need at least one")
-
-    sample = trackers[0]
-    assert isinstance(sample, dict)
-    print(f"\n[discovered] tracker payload keys ({len(sample)}):")
-    print(f"  {sorted(sample.keys())}")
-    # Detect the id field name without asserting a specific one.
-    id_field = next(
-        (k for k in ("trackerId", "id", "tracker_id") if k in sample),
-        None,
-    )
-    assert id_field is not None, (
-        f"Could not find an id field in tracker payload. Keys: {sorted(sample)}"
-    )
+# Read-only canary: every read the integration relies on must still answer in the
+# shape the entities expect. Prints nothing personal (CI logs are public).
 
 
-async def test_get_trips_last_30_days(authed_client: GeoRideApiClient) -> None:
+async def test_every_read_of_the_poll_still_works(authed_client: GeoRideApiClient, caplog) -> None:
     trackers = await authed_client.get_trackers()
     if not trackers:
         pytest.skip("Account has no trackers")
-    tracker = trackers[0]
-    tracker_id = tracker.get("trackerId") or tracker.get("id")
-    assert tracker_id is not None
+    # A route GeoRide removed is logged as "optional data unavailable".
+    assert "optional data unavailable" not in caplog.text
+    assert not authed_client._skipped
+    for tracker in trackers:
+        assert isinstance(tracker["trackerId"], int)
+        for key in ("trackerName", "odometer", "fixtime", "online", "vehicleId", "georideTrackerId"):
+            assert tracker[key] is not None, key
+        assert isinstance(tracker["capabilities"], list)
+
+
+async def test_secondary_reads_keep_their_shape(authed_client: GeoRideApiClient) -> None:
+    trackers = await authed_client.get_trackers()
+    if not trackers:
+        pytest.skip("Account has no trackers")
+    tid = trackers[0]["trackerId"]
+
+    trip = await authed_client.get_last_trip(tid)
+    if trip is not None:
+        assert {"id", "startTime", "endTime", "distance", "duration", "maxSpeed"} <= set(trip)
+        with_metrics = await authed_client.add_trip_metrics(tid, trip)
+        assert {"averageSpeed", "maxLeftAngle", "maxRightAngle"} <= set(with_metrics)
 
     end = date.today()
-    start = end - timedelta(days=30)
-    from_iso = f"{start.isoformat()}T00:00:00Z"
-    to_iso = f"{end.isoformat()}T23:59:59Z"
-
-    trips = await authed_client.get_trips(tracker_id, from_iso, to_iso)
+    trips = await authed_client.get_trips(tid, f"{(end - timedelta(days=30)).isoformat()}T00:00:00Z", f"{end.isoformat()}T23:59:59Z")
     assert isinstance(trips, list)
 
-    print(f"\n[discovered] {len(trips)} trip(s) in last 30 days for tracker {tracker_id}")
-    if trips:
-        sample = trips[0]
-        assert isinstance(sample, dict)
-        print(f"[discovered] trip payload keys ({len(sample)}):")
-        print(f"  {sorted(sample.keys())}")
-        # Print a tiny redacted preview so we can see value types.
-        preview = {
-            k: type(v).__name__ if not isinstance(v, (int, float, bool, str))
-            else (v if not isinstance(v, str) or len(v) < 40 else f"{v[:37]}...")
-            for k, v in sample.items()
-        }
-        print(f"[discovered] trip sample (types/short values):")
-        print(f"  {preview}")
+    for item in await authed_client.get_maintenance(tid):
+        assert {"id", "name", "todo", "dateUnitType"} <= set(item)
+    for beacon in await authed_client.get_tracker_beacons(tid):
+        assert {"id", "name"} <= set(beacon)
+    for event in await authed_client.get_events(tid):
+        assert {"kind", "occurredAt"} <= set(event)
+    assert await authed_client.get_session_expiry()

@@ -17,6 +17,7 @@ except ImportError:  # older Home Assistant
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_EMAIL, CONF_TOKEN
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .api import (
@@ -30,9 +31,13 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 CONF_OTP = "otp"
+CONF_RESEND = "resend"
 
 STEP_USER_DATA_SCHEMA = vol.Schema({vol.Required(CONF_EMAIL): str})
-STEP_OTP_DATA_SCHEMA = vol.Schema({vol.Required(CONF_OTP): str})
+# The code may stay empty when the user only asks for a new one.
+STEP_OTP_DATA_SCHEMA = vol.Schema(
+    {vol.Optional(CONF_OTP, default=""): str, vol.Optional(CONF_RESEND, default=False): bool}
+)
 
 
 class GeoRideConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -44,15 +49,22 @@ class GeoRideConfigFlow(ConfigFlow, domain=DOMAIN):
         self._email = ""
         self._entry: ConfigEntry | None = None  # set for reauth / reconfigure
         self._client: GeoRideApiClient | None = None
+        self._session: aiohttp.ClientSession | None = None
 
     def _api(self) -> GeoRideApiClient:
         if self._client is None:
             # Own session without cookie jar: the session cookie is sent explicitly.
-            session = async_create_clientsession(
+            self._session = async_create_clientsession(
                 self.hass, cookie_jar=aiohttp.DummyCookieJar()
             )
-            self._client = GeoRideApiClient(session)
+            self._client = GeoRideApiClient(self._session)
         return self._client
+
+    @callback
+    def async_remove(self) -> None:
+        """Close the flow's HTTP session (otherwise only closed when HA stops)."""
+        if self._session is not None:
+            self.hass.async_create_task(self._session.close())
 
     async def _send_code(self) -> str | None:
         """Mail a login code to self._email. Return an error key or None."""
@@ -88,10 +100,16 @@ class GeoRideConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Exchange the mailed code for a session and store it."""
         errors: dict[str, str] = {}
-        if user_input is not None:
+        code = (user_input or {}).get(CONF_OTP, "").strip()
+        if user_input is not None and user_input.get(CONF_RESEND):
+            if error := await self._send_code():
+                errors["base"] = error
+        elif user_input is not None and not code:
+            errors["base"] = "invalid_code"
+        elif user_input is not None:
             client = self._api()
             try:
-                token = await client.verify_otp(self._email, user_input[CONF_OTP].strip())
+                token = await client.verify_otp(self._email, code)
                 await client.get_trackers()
             except GeoRideAuthError:
                 errors["base"] = "invalid_code"

@@ -19,8 +19,10 @@ pour que chaque moto y apparaisse comme un appareil avec :
   seul avec le badge ou le téléphone)
 - 🚨 des **événements HA** quand l'alarme se déclenche (vibration,
   mouvement…), avec environ 1 min de délai
-- 🔋 sa **batterie en %**, son **compteur kilométrique** et son **dernier
-  trajet** (distance, durée, vitesses, angle max à gauche et à droite)
+- 🔋 la **batterie de la moto** et celle **du traceur** en %, une alerte
+  si le traceur est **débranché**, le **compteur kilométrique** et le
+  **dernier trajet** (distance, durée, vitesses, angle max à gauche et
+  à droite)
 - 🛠️ un **capteur par entretien** configuré dans l'appli GeoRide
   (vidange, chaîne, pneus…)
 - 🏷️ tes **badges Bluetooth**, comme appareils séparés avec leur
@@ -28,6 +30,11 @@ pour que chaque moto y apparaisse comme un appareil avec :
 
 L'intégration utilise l'API v2 de GeoRide (`api-v2.georide.com`), celle
 de l'appli depuis sa version 5.5, interrogée toutes les 60 s.
+
+**Traceurs pris en charge** : GeoRide 3 et 3S (vérifiés), GeoRide 1 et
+Mini (verrou manuel, non testé faute de matériel). Les **motos
+partagées** avec toi par leur propriétaire apparaissent comme les
+tiennes (vérifié avec un compte qui en a deux).
 
 ---
 
@@ -95,9 +102,12 @@ perfectibles : les contributions natives sont bienvenues.
 Comme l'appli GeoRide, l'intégration se connecte **sans mot de passe** :
 tu saisis l'e-mail de ton compte, GeoRide t'envoie un code à usage
 unique par e-mail, tu le tapes. Seule la session qui en résulte est
-conservée.
+conservée. Code pas reçu ou expiré : coche *Envoyez-moi un nouveau
+code* sur le même écran.
 
-**Une session GeoRide dure 90 jours.** Quand elle expire, GeoRide
+**Une session GeoRide dure 90 jours et se prolonge tant que
+l'intégration s'en sert** : en usage normal, pas de nouveau code à
+saisir. Si elle expire quand même (HA éteint longtemps), GeoRide
 refuse les appels et Home Assistant te demande de **te réauthentifier**
 (notification dans *Paramètres*, et sur la carte GeoRide dans
 *Appareils et services*). Il suffit de la valider : un
@@ -120,23 +130,39 @@ suivantes.
 |---|---|---|
 | `device_tracker` | (nom de la moto) | Position GPS, affichée sur la carte. |
 | `lock` | (nom de la moto) | Verrou manuel, traceurs GeoRide 1 seulement. Le GeoRide 3 se verrouille seul (badge, téléphone) : pas d'entité. |
-| `switch` | Mode éco | Mode « moto sans batterie » de l'appli. Appliqué à la prochaine connexion du traceur, ce qui peut prendre des heures quand il est en veille. |
+| `switch` | Mode éco | Mode « moto sans batterie » de l'appli, pour les traceurs qui l'ont (pas les GeoRide 1 et Mini). Appliqué à la prochaine connexion du traceur, ce qui peut prendre des heures quand il est en veille : en attendant, l'interrupteur affiche le mode demandé et l'attribut `pending_until` l'heure prévue par GeoRide. |
 | `sensor` | Compteur kilométrique | Kilomètres parcourus. |
-| `sensor` | Vitesse | Indisponible : l'API v2 ne donne plus la vitesse instantanée. |
 | `sensor` | Batterie | Batterie de la moto en %, calculée depuis la tension. |
+| `sensor` | Batterie du traceur | Diagnostic. Batterie interne du boîtier GeoRide en %. |
 | `sensor` | Dernière position | Horodatage du dernier point GPS. |
-| `sensor` | Dernier trajet : fin, distance, durée, vitesse moyenne, vitesse max | Le trajet le plus récent (rafraîchi toutes les 5 min). Il reste affiché jusqu'au suivant, même après l'hivernage ou un redémarrage (jusqu'à un an). |
+| `sensor` | Dernier trajet : fin, distance, durée, vitesse moyenne, vitesse max | Le trajet le plus récent (vérifié toutes les 5 min). Il reste affiché jusqu'au suivant, même après l'hivernage ou un redémarrage. |
 | `sensor` | Angle d'inclinaison max du dernier trajet | Désactivé par défaut. Degrés depuis la verticale ; attributs `max_left`, `max_right` et `side`. |
-| `sensor` | Altitude | Diagnostic, désactivé par défaut. Indisponible avec l'API v2. |
-| `sensor` | Tension batterie externe / interne | Diagnostic. La tension interne est indisponible avec l'API v2 (elle donne un pourcentage). |
+| `sensor` | Tension batterie externe | Diagnostic. Tension de la batterie de la moto. |
 | `sensor` | Fin de l'abonnement | Diagnostic, désactivé par défaut. |
 | `sensor` | (un par entretien) | Un capteur diagnostic par entretien configuré dans l'appli, en km ou en jours restants (négatif = en retard). |
 | `binary_sensor` | En mouvement | Déduit de l'âge du dernier point GPS (moins de 5 min). |
-| `binary_sensor` | Volée / Chute détectée | Inconnus avec l'API v2, qui ne donne plus ces informations. |
+| `binary_sensor` | Alimentation branchée | Éteint quand le traceur perd l'alimentation de la moto : câble coupé ou batterie débranchée. |
+| `binary_sensor` | Volée | Allumé tant qu'un vol est déclaré à l'assistance GeoRide. |
+| `binary_sensor` | Traceur en ligne | Diagnostic. Le traceur est connecté à GeoRide. |
+| `binary_sensor` | Mode maintenance | Diagnostic. Mode maintenance (garage, transport) actif. |
+| `binary_sensor` | Appel d'urgence / Appel aux proches | Diagnostic, désactivés par défaut. Services d'appel après une chute. |
 | `binary_sensor` | Badge associé | Diagnostic, désactivé par défaut. |
+| `update` | Firmware / Firmware Bluetooth | Version installée et dernière version. La mise à jour se lance depuis l'appli GeoRide. |
+| `number` | Tension de coupure batterie | Réglage. Tension de la batterie moto sous laquelle le traceur cesse de s'alimenter dessus (11 à 16 V). Envoyé au traceur à sa prochaine connexion. |
+| `switch` | Détecteur de chute | Réglage. |
+| `switch` | Mode veille | Réglage. Appliqué à la prochaine connexion du traceur ; l'attribut `pending` indique une demande en attente. |
+| `sensor` | Sensibilité aux vibrations | Diagnostic. Niveau réglé dans l'appli. |
+
+Une entité n'est créée que si le traceur a la fonction : un GeoRide 1 ou
+une moto partagée n'ont pas forcément les réglages ci-dessus.
+
+Restent pour leur historique, **désactivées par défaut et indisponibles**
+car l'API v2 ne donne plus ces informations : *Vitesse*, *Altitude*,
+*Tension batterie interne* et *Chute détectée*.
 
 Les traceurs et badges retirés du compte GeoRide disparaissent de Home
-Assistant au redémarrage suivant ; les nouveaux apparaissent en une
+Assistant au redémarrage suivant ; en attendant, tu peux les supprimer
+depuis leur fiche (*⋮ → Supprimer*). Les nouveaux apparaissent en une
 minute environ.
 
 ### Badges
@@ -147,8 +173,8 @@ rattaché à sa moto.
 | Plateforme | Entité | Contenu |
 |---|---|---|
 | `sensor` | Batterie | Batterie du badge en %. |
-| `sensor` | Dernière remontée batterie | Indisponible avec l'API v2. |
-| `binary_sensor` | Mise à jour du firmware disponible | Inconnue avec l'API v2. |
+| `sensor` | Dernière remontée batterie | Désactivé par défaut : indisponible avec l'API v2. |
+| `binary_sensor` | Mise à jour du firmware disponible | Désactivé par défaut : indisponible avec l'API v2. |
 
 Le modèle du badge s'affiche sur la fiche de l'appareil, et son adresse
 MAC y est rattachée.
@@ -156,9 +182,11 @@ MAC y est rattachée.
 ## Rafraîchissement des données
 
 L'intégration interroge `api-v2.georide.com` toutes les 60 s (véhicule,
-traceur, batterie, mode, abonnement et derniers événements du
-traceur). Les trajets sont rafraîchis toutes les 5 min, les entretiens
-et les badges toutes les 15 min. L'API v2 n'a pas de canal temps réel
+traceur, batterie et derniers événements du traceur). Le dernier trajet
+est vérifié toutes les 5 min (un seul appel), le mode, l'abonnement, le
+firmware, les réglages, la déclaration de vol, les entretiens et les
+badges toutes les 15 min : un changement fait dans l'appli GeoRide peut
+donc mettre 15 min à apparaître. L'API v2 n'a pas de canal temps réel
 (l'appli n'ouvre plus l'ancien flux socket.io) : les alarmes arrivent
 dans Home Assistant en une minute environ.
 
@@ -279,9 +307,11 @@ automation:
 ## Carte Lovelace
 
 Une carte personnalisée tient dans `lovelace/georide-card.js`. Elle
-regroupe la carte, le verrou, la batterie, la vitesse, le compteur, la
-dernière position et le dernier trajet dans un seul bloc par moto, avec
-une photo de la moto en bandeau si tu veux.
+regroupe la carte, le verrou, la batterie de la moto et celle du
+traceur, le compteur, la dernière position et le dernier trajet dans un
+seul bloc par moto, avec une photo de la moto en bandeau si tu veux. Une
+pastille **DÉBRANCHÉ** s'affiche si le traceur perd l'alimentation de la
+moto.
 
 ### Installation
 
@@ -307,8 +337,10 @@ texte.
 - **La batterie en % est une estimation** : courbe linéaire de 11,0 V
   (0 %) à 12,7 V (100 %), alors que la décharge réelle d'une batterie
   au plomb ne l'est pas.
-- **Pas de vitesse instantanée, d'altitude, ni d'indicateur vol ou
-  chute** avec l'API v2.
+- **Pas de vitesse instantanée, d'altitude, ni d'indicateur de chute**
+  avec l'API v2.
+- **Mode veille** : seule la désactivation a été vérifiée sur un vrai
+  traceur.
 - **Alarmes avec environ 1 min de délai** : il n'y a plus de temps
   réel.
 - **Motos partagées** : si GeoRide refuse à ton compte les données d'une
@@ -330,6 +362,11 @@ logger:
     custom_components.georide_ha: debug
 ```
 
+En débogage, le journal contient chaque appel à GeoRide (`GET
+/v1/vehicles -> 200 in 235 ms`), sans la session ni le contenu des
+réponses. En niveau normal, il signale une fois chaque donnée qui cesse
+d'arriver (« fetch failed … keeping previous »), puis son retour.
+
 Pour un instantané complet : *Paramètres → Appareils et services →
 GeoRide → ⋮ → Télécharger les diagnostics*. La session, les
 coordonnées GPS et l'e-mail y sont masqués.
@@ -344,8 +381,9 @@ expirée : valide la notification de nouvelle authentification (ou
    appareils, entités et intégration sont retirés.
 2. Dans HACS : *GeoRide → ⋮ → Supprimer* pour retirer les fichiers de
    `custom_components`.
-3. La session reste valable chez GeoRide jusqu'à son expiration
-   (90 jours).
+3. La session GeoRide de l'intégration est fermée à la suppression (si
+   GeoRide est injoignable à ce moment-là, elle expire seule en
+   90 jours).
 
 ## Qualité
 
@@ -359,7 +397,7 @@ dans [`custom_components/georide_ha/quality_scale.yaml`](custom_components/geori
 - 🏆 Platine : **2 / 3** règles, la 3e exemptée (aucune dépendance
   externe : le client de l'API est dans l'intégration)
 
-Le tout vérifié à chaque push par la CI : mypy `--strict` et 255 tests
+Le tout vérifié à chaque demande de fusion par la CI : mypy `--strict` et 290 tests
 (97 % de couverture) contre la dernière version de Home Assistant, plus
 les validations officielles `hassfest` et HACS (aussi lancées chaque
 semaine pour repérer une version de HA qui casserait l'intégration). C'est une auto-évaluation : Home

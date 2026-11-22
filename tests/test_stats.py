@@ -44,9 +44,9 @@ class TestSummarizeSingleTrip:
         assert r["total_km"] == 7.12
         assert r["avg_km_per_trip"] == 7.12
 
-    def test_distance_already_in_km(self):
-        r = stats.summarize([_trip(distance=42.5)])
-        assert r["total_km"] == 42.5
+    def test_short_trip_is_meters(self):
+        r = stats.summarize([_trip(distance=900)])
+        assert r["total_km"] == 0.9
 
     def test_speeds_are_kmh(self):
         # v2 reports km/h: the 2026-09-13 ride shows 167 km/h in the app.
@@ -107,10 +107,6 @@ class TestSummarizeDefensive:
         assert r["max_right_lean_angle"] is None
         assert r["avg_top_speed"] is None
 
-    def test_alternate_distance_key(self):
-        r = stats.summarize([{"id": 1, "tripDistance": 5_000}])
-        assert r["total_km"] == 5.0
-
     def test_string_values_are_skipped(self):
         r = stats.summarize([{"id": 1, "distance": "7118", "maxSpeed": "60"}])
         assert r["total_km"] == 0.0
@@ -129,23 +125,14 @@ class TestTripMonth:
     def test_iso_with_offset(self):
         assert stats.trip_month("2026-04-16T08:47:18+02:00") == "2026-04"
 
-    def test_epoch_seconds(self):
-        assert stats.trip_month(1_704_067_200) == "2024-01"
+    def test_local_time_zone(self):
+        """A ride at 00:30 in Paris on 1 November is a November ride (UTC: 31 October)."""
+        from zoneinfo import ZoneInfo
 
-    def test_epoch_milliseconds(self):
-        assert stats.trip_month(1_704_067_200_000) == "2024-01"
+        assert stats.trip_month("2026-10-31T23:30:00Z") == "2026-10"
+        assert stats.trip_month("2026-10-31T23:30:00Z", ZoneInfo("Europe/Paris")) == "2026-11"
 
-    @pytest.mark.parametrize("v", [None, "garbage", True, [2026]])
+    @pytest.mark.parametrize("v", [None, "garbage", True, [2026], 1_704_067_200])
     def test_invalid(self, v):
         assert stats.trip_month(v) is None
 
-
-class TestPick:
-    def test_first_present(self):
-        assert stats.pick({"a": 1, "b": 2}, ("a", "b")) == 1
-
-    def test_skips_none(self):
-        assert stats.pick({"a": None, "b": 2}, ("a", "b")) == 2
-
-    def test_all_missing(self):
-        assert stats.pick({}, ("a", "b")) is None

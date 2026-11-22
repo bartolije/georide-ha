@@ -21,6 +21,9 @@ def _mock_coordinator(trackers):
     coord.data = {t["trackerId"]: t for t in trackers}
     coord.last_update_success = True
     coord.update_interval = timedelta(seconds=60)
+    coord.client._unsupported = {"/v1/trackers/tracker_1/manual-lock"}
+    coord.client._skipped = set()
+    coord.client.get_session_expiry = AsyncMock(return_value="2027-02-20T17:28:02.117Z")
     return coord
 
 
@@ -86,6 +89,9 @@ class TestEntryDiagnostics:
         result = await diagnostics.async_get_config_entry_diagnostics(hass, entry)
         assert result["update_interval_seconds"] == 60.0
         assert result["last_update_success"] is True
+        assert result["unsupported_paths"] == ["/v1/trackers/tracker_1/manual-lock"]
+        assert result["skipped_vehicles"] == []
+        assert result["session_expires"] == "2027-02-20T17:28:02.117Z"
 
 
 class TestDeviceDiagnostics:

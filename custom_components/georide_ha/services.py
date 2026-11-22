@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, timedelta
 from typing import Any
 
 try:
@@ -18,6 +18,7 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 import homeassistant.helpers.config_validation as cv
+from homeassistant.util import dt as dt_util
 
 from .api import (
     GeoRideApiClient,
@@ -43,13 +44,11 @@ TRIP_SUMMARY_SCHEMA = vol.Schema(
 
 
 def _to_utc_iso(d: date, *, end_of_day: bool = False) -> str:
-    """Convert a date to an ISO 8601 UTC datetime string."""
-    t = datetime.combine(
-        d,
-        datetime.max.time().replace(microsecond=0) if end_of_day else datetime.min.time(),
-        tzinfo=timezone.utc,
-    )
-    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    """Start (or last second) of local day `d` in Home Assistant's time zone, as UTC ISO 8601."""
+    t = dt_util.start_of_local_day(d + timedelta(days=1) if end_of_day else d)
+    if end_of_day:
+        t -= timedelta(seconds=1)
+    return dt_util.as_utc(t).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 async def async_setup_services(hass: HomeAssistant, domain: str = DOMAIN) -> None:
@@ -70,6 +69,7 @@ async def async_setup_services(hass: HomeAssistant, domain: str = DOMAIN) -> Non
                 translation_key="invalid_date_range",
             )
 
+        tz = dt_util.get_default_time_zone()
         from_iso = _to_utc_iso(start_d)
         to_iso = _to_utc_iso(end_d, end_of_day=True)
         requested = call.data.get("tracker_id")
@@ -122,16 +122,16 @@ async def async_setup_services(hass: HomeAssistant, domain: str = DOMAIN) -> Non
                     ) from err
 
                 if trips:
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "GeoRide trips: tracker=%s count=%d keys=%s",
                         tid,
                         len(trips),
                         sorted(trips[0].keys()),
                     )
 
-                summary = _summarize(trips)
+                summary = _summarize(trips, tz)
                 tracker_entry: dict[str, Any] = {
-                    "tracker_name": tracker.get("trackerName") or tracker.get("name"),
+                    "tracker_name": tracker.get("trackerName"),
                     "summary": summary,
                 }
                 if include_trips:
@@ -149,7 +149,7 @@ async def async_setup_services(hass: HomeAssistant, domain: str = DOMAIN) -> Non
         response: dict[str, Any] = {
             "range": {"from": from_iso, "to": to_iso},
             "trackers": per_tracker,
-            "aggregate": _summarize(all_trips),
+            "aggregate": _summarize(all_trips, tz),
         }
         return response
 

@@ -191,6 +191,21 @@ class TestErrors:
         with pytest.raises(GeoRideConnectionError):
             await client.get_trackers()
 
+    async def test_timeout_is_connection_error(self):
+        # aiohttp raises TimeoutError (not ClientError) when the total timeout passes.
+        session = FakeSession({}, raises=TimeoutError())
+        client = GeoRideApiClient(session, token="t")  # type: ignore[arg-type]
+        with pytest.raises(GeoRideConnectionError):
+            await client.get_trackers()
+
+    async def test_every_call_is_traced_at_debug_without_the_cookie(self, caplog):
+        caplog.set_level("DEBUG", logger="custom_components.georide_ha.api")
+        client, _ = _client(_tracker_routes(), token="secret.sig")
+        await client.get_trackers()
+        assert "GET /v1/vehicles -> 200" in caplog.text
+        assert f"GET /v1/trackers/{TID}/manual-lock -> 422 TRACKER_FEATURE_NOT_SUPPORTED" in caplog.text
+        assert "secret" not in caplog.text
+
     async def test_unknown_tracker_before_refresh(self):
         client, _ = _client({})
         with pytest.raises(GeoRideError):
@@ -209,6 +224,7 @@ class TestGetTrackers:
         assert tracker["fixtime"] == "2026-09-13T17:32:41.400Z"
         assert tracker["moving"] is False  # fix is weeks old
         assert tracker["externalBatteryVoltage"] == 13.4
+        assert tracker["internalBatteryLevel"] == 100 and tracker["isPlugged"] is True
         assert tracker["isInEco"] is True and tracker["isInElectricMode"] is False
         assert tracker["canLock"] is False and tracker["isLocked"] is None
         assert tracker["expires"] == "2027-06-07T18:50:58.523Z"
@@ -297,6 +313,38 @@ class TestTrips:
         assert trip == {"id": "trip_1", "maxSpeed": 110.19, "averageSpeed": 35, "maxLeftAngle": 12.5, "maxRightAngle": 24.3}
 
 
+class TestSlowReads:
+    async def test_mode_and_subscription_read_every_15_min_not_every_poll(self):
+        client, session = await _ready_client({})  # first poll already read them
+        await client.get_trackers()
+        paths = [c[1] for c in session.calls]
+        assert f"/v1/trackers/{TID}/settings/mode" not in paths
+        assert "/v1/subscriptions/sub_01" not in paths
+        assert f"/v1/trackers/{TID}/battery" in paths  # read every poll
+
+    async def test_slow_reads_refreshed_after_the_ttl(self, monkeypatch):
+        import custom_components.georide_ha.api as api_module
+
+        client, session = await _ready_client({})
+        now = api_module.time.monotonic()
+        monkeypatch.setattr(api_module.time, "monotonic", lambda: now + api_module.SLOW_DATA_TTL + 1)
+        await client.get_trackers()
+        assert "/v1/subscriptions/sub_01" in [c[1] for c in session.calls]
+
+
+class TestLastTrip:
+    async def test_one_call_newest_first(self):
+        trip = {"id": "trip_1", "endTime": "2026-09-13T17:32:41.400Z"}
+        client, session = await _ready_client({("GET", f"/v1/vehicles/{VID}/trips"): _resp(200, {"data": [trip], "page": {"nextCursor": "x"}})})
+        assert await client.get_last_trip(2216122) == trip
+        assert len(session.calls) == 1
+        assert session.calls[0][2]["params"] == {"limit": "1", "sort": "startTime:desc"}
+
+    async def test_none_without_trip(self):
+        client, _ = await _ready_client({("GET", f"/v1/vehicles/{VID}/trips"): _resp(200, {"data": [], "page": {}})})
+        assert await client.get_last_trip(2216122) is None
+
+
 class TestOtherReads:
     async def test_maintenance_time_counter_in_days(self):
         client, _ = await _ready_client({
@@ -342,8 +390,100 @@ class TestCommands:
         await getattr(client, method)(2216122)
         assert session.calls[0][:2] == ("POST", path)
 
+    async def test_mode_command_returns_eta_and_rereads_mode(self):
+        path = f"/v1/trackers/{TID}/settings/mode/eco"
+        client, session = await _ready_client({("POST", path): _resp(201, {"type": "ecoModeIn", "eta": "2026-11-07T04:57:00.000Z"})})
+        assert await client.eco_mode_on(2216122) == "2026-11-07T04:57:00.000Z"
+        session.calls.clear()
+        await client.get_trackers()
+        assert ("GET", f"/v1/trackers/{TID}/settings/mode") in [c[:2] for c in session.calls]
+
     async def test_command_auth_error(self):
         client, _ = await _ready_client({("POST", f"/v1/trackers/{TID}/settings/mode/eco"): _resp(401)})
         with pytest.raises(GeoRideAuthError):
             await client.eco_mode_on(2216122)
 
+
+
+BASE = f"/v1/trackers/{TID}"
+SETTINGS = {
+    ("GET", f"{BASE}/firmware-update"): _resp(200, {"stm": {"currentVersion": 50, "latestVersion": 51}, "nrf": {"currentVersion": 5, "latestVersion": 5}}),
+    ("GET", f"{BASE}/settings/sleep-mode"): _resp(200, {"enabled": False, "pending": None}),
+    ("GET", f"{BASE}/settings/maintenance-mode"): _resp(200, {"enabled": False}),
+    ("GET", f"{BASE}/settings/cutoff-voltage"): _resp(200, {"cutoffVoltage": 12250}),
+    ("GET", f"{BASE}/settings/vibration-sensitivity"): _resp(200, {"vibrationSensitivity": 2}),
+    ("GET", f"{BASE}/settings/fall-detector"): _resp(200, {"enabled": True}),
+    ("GET", f"{BASE}/ecall"): _resp(200, {"friendCallEnabled": False, "emergencyCallEnabled": True}),
+    ("GET", f"{BASE}/assistance/theft/report"): _resp(200, None),
+}
+
+
+class TestSettings:
+    """Shapes read on a real GeoRide 3S on 2026-11-22."""
+
+    async def test_settings_merged_into_the_tracker(self):
+        client, _ = _client(_tracker_routes(SETTINGS))
+        [t] = await client.get_trackers()
+        assert (t["firmwareVersion"], t["firmwareLatest"], t["bleFirmwareVersion"]) == (50, 51, 5)
+        assert t["cutoffVoltage"] == 12.25 and t["vibrationSensitivity"] == 2
+        assert t["sleepMode"] is False and t["maintenanceMode"] is False and t["fallDetector"] is True
+        assert t["emergencyCallEnabled"] is True and t["friendCallEnabled"] is False
+        assert t["isStolen"] is False  # route answered null: no theft declared
+
+    async def test_theft_declared(self):
+        routes = {**SETTINGS, ("GET", f"{BASE}/assistance/theft/report"): _resp(200, {"id": "report_1"})}
+        client, _ = _client(_tracker_routes(routes))
+        [t] = await client.get_trackers()
+        assert t["isStolen"] is True
+
+    async def test_model_without_settings_gets_none_not_false(self):
+        routes = {k: NOT_SUPPORTED for k in SETTINGS}
+        client, _ = _client(_tracker_routes(routes))
+        [t] = await client.get_trackers()
+        assert t["isStolen"] is None and t["cutoffVoltage"] is None and t["firmwareVersion"] is None
+
+    async def test_route_removed_by_georide_is_ignored_with_one_warning(self, caplog):
+        client, session = _client(_tracker_routes())  # settings routes answer 404 NOT_FOUND
+        [t] = await client.get_trackers()
+        await client.get_trackers()
+        assert t["trackerId"] == 2216122 and t["sleepMode"] is None
+        assert caplog.text.count("optional data unavailable, ignored until reload: HTTP 404 NOT_FOUND on GET /v1/trackers/tracker_01/settings/sleep-mode") == 1
+
+    async def test_settings_read_every_15_min_not_every_poll(self):
+        client, session = await _ready_client(SETTINGS)
+        await client.get_trackers()
+        assert not [c for c in session.calls if "settings/" in c[1] or "firmware" in c[1]]
+
+    async def test_cutoff_voltage_sent_in_millivolts_then_read_again(self):
+        path = f"{BASE}/settings/cutoff-voltage"
+        client, session = await _ready_client({**SETTINGS, ("PATCH", path): _resp(200, {"type": "newSettings", "eta": None})})
+        await client.set_cutoff_voltage(2216122, 12.3)
+        assert session.calls[0][:2] == ("PATCH", path) and session.calls[0][2]["json"] == {"cutoffVoltage": 12300}
+        session.calls.clear()
+        await client.get_trackers()
+        assert ("GET", path) in [c[:2] for c in session.calls]
+
+    async def test_fall_detector_and_sleep_mode_routes(self):
+        client, session = await _ready_client({
+            **SETTINGS,
+            ("PATCH", f"{BASE}/settings/fall-detector"): _resp(200, {"enabled": False}),
+            ("POST", f"{BASE}/settings/sleep-mode/on"): _resp(201, {}),
+            ("POST", f"{BASE}/settings/sleep-mode/off"): _resp(201, {}),
+        })
+        await client.set_fall_detector(2216122, False)
+        await client.set_sleep_mode(2216122, True)
+        await client.set_sleep_mode(2216122, False)
+        assert [(c[0], c[1].removeprefix(BASE), c[2]["json"]) for c in session.calls] == [
+            ("PATCH", "/settings/fall-detector", {"enabled": False}),
+            ("POST", "/settings/sleep-mode/on", None),
+            ("POST", "/settings/sleep-mode/off", None),
+        ]
+
+    async def test_sign_out_and_session_expiry(self):
+        client, session = _client({
+            ("POST", "/auth/sign-out"): _resp(200, None),
+            ("GET", "/auth/session"): _resp(200, {"id": "s", "expiresAt": "2027-02-20T17:28:02.117Z"}),
+        })
+        assert await client.get_session_expiry() == "2027-02-20T17:28:02.117Z"
+        await client.sign_out()
+        assert session.calls[-1][2]["json"] == {} and client.token is None
