@@ -1,14 +1,15 @@
 """GeoRide sensor platform.
 
-Eight sensors per tracker:
+Per tracker:
 - odometer (km, total_increasing)
-- speed (km/h)
-- battery_level (%, computed from external battery voltage)
+- battery_level (%, the bike's battery, computed from its voltage)
+- internal_battery (%, the tracker's own battery, diagnostic)
 - last_seen (timestamp of the latest GPS fix)
-- altitude (m, diagnostic, disabled by default)
-- external_battery_voltage (V, diagnostic, enabled — useful as a fallback)
-- internal_battery_voltage (V, diagnostic, disabled by default)
+- external_battery_voltage (V, diagnostic)
 - subscription_expires (timestamp, diagnostic, disabled by default)
+- speed, altitude, internal_battery_voltage: no source in the v2 API,
+  disabled by default and unavailable (kept for their history).
+Plus the last-trip sensors, one per maintenance item, and beacon sensors.
 """
 from __future__ import annotations
 
@@ -72,6 +73,7 @@ SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.SPEED,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        entity_registry_enabled_default=False,  # no source in the v2 API
         value_fn=lambda d: _number(d.get("speed")),
     ),
     GeoRideSensorEntityDescription(
@@ -115,6 +117,21 @@ SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         value_fn=lambda d: _number(d.get("internalBatteryVoltage")),
+    ),
+    GeoRideSensorEntityDescription(
+        key="internal_battery",
+        translation_key="internal_battery",
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _number(d.get("internalBatteryLevel")),
+    ),
+    GeoRideSensorEntityDescription(
+        key="vibration_sensitivity",
+        translation_key="vibration_sensitivity",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _number(d.get("vibrationSensitivity")),
     ),
     GeoRideSensorEntityDescription(
         key="subscription_expires",
@@ -255,6 +272,7 @@ BEACON_SENSORS: tuple[GeoRideSensorEntityDescription, ...] = (
         key="last_seen",
         translation_key="beacon_last_seen",
         device_class=SensorDeviceClass.TIMESTAMP,
+        entity_registry_enabled_default=False,  # no source in the v2 API
         value_fn=lambda d: _parse_timestamp(d.get("lastBatteryLevelUpdate")),
     ),
 )
@@ -333,7 +351,7 @@ class GeoRideSensor(GeoRideEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator, tracker_id)
         self.entity_description = description
-        self._attr_unique_id = f"{tracker_id}-{description.key}"
+        self._attr_unique_id = f"{self._uid}-{description.key}"
 
     @property
     def native_value(self) -> StateType | datetime:
@@ -359,7 +377,7 @@ class GeoRideLastTripSensor(GeoRideEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator, tracker_id)
         self.entity_description = description
-        self._attr_unique_id = f"{tracker_id}-{description.key}"
+        self._attr_unique_id = f"{self._uid}-{description.key}"
 
     @property
     def native_value(self) -> StateType | datetime:
@@ -395,7 +413,7 @@ class GeoRideMaintenanceSensor(GeoRideEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator, tracker_id)
         self._item_id = item_id
-        self._attr_unique_id = f"{tracker_id}-maintenance-{item_id}"
+        self._attr_unique_id = f"{self._uid}-maintenance-{item_id}"
 
     @property
     def _item(self) -> dict[str, Any]:
@@ -422,10 +440,6 @@ class GeoRideMaintenanceSensor(GeoRideEntity, SensorEntity):
             return round(float(todo) / 1000.0, 2)
         if dut == "days":
             return int(todo)
-        if dut == "years":
-            # GeoRide stores years-mode counters in hours (8759 h ≈ 1 y).
-            # Convert to days for a more readable display.
-            return round(float(todo) / 24.0, 1)
         # Unknown time-unit, surface raw value rather than mis-converting.
         return todo
 
@@ -458,8 +472,12 @@ class GeoRideBeaconSensor(GeoRideBeaconEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator, tracker_id, beacon_id)
         self.entity_description = description
-        self._attr_unique_id = f"beacon-{beacon_id}-{description.key}"
+        self._attr_unique_id = f"{self._uid}-{description.key}"
 
     @property
     def native_value(self) -> StateType | datetime:
         return self.entity_description.value_fn(self._beacon)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.native_value is not None

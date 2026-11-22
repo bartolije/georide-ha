@@ -24,11 +24,7 @@ from custom_components.georide_ha.const import (  # noqa: E402
     EVENT_LOCK,
     EVENT_MOVING,
 )
-from custom_components.georide_ha.coordinator import (  # noqa: E402
-    LAST_TRIPS_INITIAL_LOOKBACK,
-    LAST_TRIPS_LOOKBACK,
-    GeoRideCoordinator,
-)
+from custom_components.georide_ha.coordinator import GeoRideCoordinator  # noqa: E402
 
 
 def _make_entry(hass):
@@ -46,7 +42,7 @@ def _client(
     *,
     trackers=None,
     beacons=None,
-    trips=None,
+    last_trip=None,
     maintenance=None,
     events=None,
     trackers_raises=None,
@@ -57,7 +53,7 @@ def _client(
     else:
         client.get_trackers = AsyncMock(return_value=trackers or [])
     client.get_tracker_beacons = AsyncMock(return_value=beacons or [])
-    client.get_trips = AsyncMock(return_value=trips or [])
+    client.get_last_trip = AsyncMock(return_value=last_trip)
     client.get_maintenance = AsyncMock(return_value=maintenance or [])
     client.get_events = AsyncMock(return_value=events or [])
     client.add_trip_metrics = AsyncMock(side_effect=lambda tid, trip: trip)
@@ -98,8 +94,9 @@ class TestUpdateData:
         client = _client(trackers_raises=GeoRideConnectionError("dns"))
         coord = GeoRideCoordinator(hass, entry, client)
 
-        with pytest.raises(UpdateFailed):
+        with pytest.raises(UpdateFailed) as err:
             await coord._async_update_data()
+        assert err.value.translation_key == "update_failed"
 
 
 # ---------------------------------------------------------------------------
@@ -144,77 +141,72 @@ class TestSecondaryRefresh:
         await coord._async_update_data()
         assert coord.beacons[1][0]["name"] == "Old"  # unchanged
 
+    async def test_beacon_failure_logged_once_then_recovery(self, hass, caplog):
+        caplog.set_level("INFO", logger="custom_components.georide_ha.coordinator")
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}])
+        client.get_tracker_beacons.side_effect = GeoRideConnectionError("oops")
+        coord = GeoRideCoordinator(hass, entry, client)
+        for _ in range(3):
+            coord._maintenance_fetched_at = None
+            await coord._async_update_data()
+        assert caplog.text.count("beacons fetch failed") == 1
+
+        client.get_tracker_beacons.side_effect = None
+        coord._maintenance_fetched_at = None
+        await coord._async_update_data()
+        assert "works again" in caplog.text
+
     async def test_last_trips_refresh_throttled(self, hass):
         entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}], trips=[{"id": 7, "endTime": "2026-04-16T07:00:00Z"}])
+        client = _client(trackers=[{"trackerId": 1}], last_trip={"id": 7, "endTime": "2026-04-16T07:00:00Z"})
         coord = GeoRideCoordinator(hass, entry, client)
 
         await coord._async_update_data()
         await coord._async_update_data()
         # First refresh fetches; second within 5min skips.
-        assert client.get_trips.call_count == 1
+        assert client.get_last_trip.call_count == 1
         assert coord.last_trips[1]["id"] == 7
 
-    async def test_last_trips_picks_most_recent_by_endtime(self, hass):
+    async def test_same_trip_keeps_its_metrics(self, hass):
+        """The trip found again every 5 min after a ride: no new metrics call."""
         entry = _make_entry(hass)
-        client = _client(
-            trackers=[{"trackerId": 1}],
-            trips=[
-                {"id": 1, "endTime": "2026-04-15T10:00:00Z"},
-                {"id": 9, "endTime": "2026-04-16T10:00:00Z"},
-                {"id": 5, "endTime": "2026-04-15T20:00:00Z"},
-            ],
-        )
-        coord = GeoRideCoordinator(hass, entry, client)
-        await coord._async_update_data()
-        assert coord.last_trips[1]["id"] == 9
-
-    async def test_first_trip_lookup_reaches_a_year_back(self, hass):
-        """After a restart the last ride can be months old (winter storage)."""
-        entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}], trips=[{"id": 3, "endTime": "2026-03-01T10:00:00Z"}])
+        client = _client(trackers=[{"trackerId": 1}], last_trip={"id": 3, "endTime": "2026-03-01T10:00:00Z"})
+        client.add_trip_metrics = AsyncMock(side_effect=lambda tid, trip: {**trip, "averageSpeed": 61})
         coord = GeoRideCoordinator(hass, entry, client)
         await coord._async_update_data()
 
-        from_iso, to_iso = client.get_trips.call_args.args[1:3]
-        span = datetime.fromisoformat(to_iso.replace("Z", "+00:00")) - datetime.fromisoformat(
-            from_iso.replace("Z", "+00:00")
-        )
-        assert span == LAST_TRIPS_INITIAL_LOOKBACK
-        assert coord.last_trips[1]["id"] == 3
-
-    async def test_last_trip_kept_when_short_window_is_empty(self, hass):
-        """No ride in the last two days must not blank the last-trip sensors."""
-        entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}], trips=[{"id": 3, "endTime": "2026-03-01T10:00:00Z"}])
-        coord = GeoRideCoordinator(hass, entry, client)
-        await coord._async_update_data()
-
-        client.get_trips.return_value = []
         coord._last_trips_fetched_at = None  # skip the 5 min throttle
         await coord._async_update_data()
-
-        from_iso, to_iso = client.get_trips.call_args.args[1:3]
-        span = datetime.fromisoformat(to_iso.replace("Z", "+00:00")) - datetime.fromisoformat(
-            from_iso.replace("Z", "+00:00")
-        )
-        assert span == LAST_TRIPS_LOOKBACK
-        assert coord.last_trips[1]["id"] == 3
+        assert client.get_last_trip.call_count == 2
+        assert client.add_trip_metrics.call_count == 1
+        assert coord.last_trips[1]["averageSpeed"] == 61
 
     async def test_new_trip_replaces_the_kept_one(self, hass):
         entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}], trips=[{"id": 3, "endTime": "2026-03-01T10:00:00Z"}])
+        client = _client(trackers=[{"trackerId": 1}], last_trip={"id": 3, "endTime": "2026-03-01T10:00:00Z"})
         coord = GeoRideCoordinator(hass, entry, client)
         await coord._async_update_data()
 
-        client.get_trips.return_value = [{"id": 4, "endTime": "2026-10-11T10:00:00Z"}]
+        client.get_last_trip.return_value = {"id": 4, "endTime": "2026-10-11T10:00:00Z"}
         coord._last_trips_fetched_at = None
         await coord._async_update_data()
         assert coord.last_trips[1]["id"] == 4
 
-    async def test_no_trip_in_a_year_is_none(self, hass):
+    async def test_last_trip_fetch_failure_keeps_previous(self, hass):
         entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}], trips=[])
+        client = _client(trackers=[{"trackerId": 1}], last_trip={"id": 3})
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+
+        client.get_last_trip.side_effect = GeoRideConnectionError("dns")
+        coord._last_trips_fetched_at = None
+        await coord._async_update_data()
+        assert coord.last_trips[1]["id"] == 3
+
+    async def test_vehicle_without_trip_is_none(self, hass):
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}], last_trip=None)
         coord = GeoRideCoordinator(hass, entry, client)
         await coord._async_update_data()
         assert coord.last_trips[1] is None
@@ -273,6 +265,15 @@ class TestSubscriptionExpiry:
 
         registry = ir.async_get(hass)
         assert registry.async_get_issue(DOMAIN, "subscription_expiring_1") is None
+
+    async def test_issue_kept_after_expiry(self, hass):
+        """The tracker stops working once the subscription has ended: keep warning."""
+        entry = _make_entry(hass)
+        past = (datetime.now(tz=timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        client = _client(trackers=[{"trackerId": 1, "trackerName": "Bike", "expires": past}])
+        coord = GeoRideCoordinator(hass, entry, client)
+        await coord._async_update_data()
+        assert ir.async_get(hass).async_get_issue(DOMAIN, "subscription_expiring_1") is not None
 
     async def test_no_issue_when_expires_field_missing(self, hass):
         entry = _make_entry(hass)
@@ -369,6 +370,27 @@ class TestTrackerEvents:
         assert events[0].data["tracker_name"] == "ZX"
         assert events[0].data["source"] == "events"
 
+    async def test_timeout_on_events_does_not_fail_the_update(self, hass, caplog):
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}])
+        client.get_events.side_effect = GeoRideConnectionError("TimeoutError")
+        coord = GeoRideCoordinator(hass, entry, client)
+        for _ in range(3):
+            assert 1 in await coord._async_update_data()
+        assert caplog.text.count("events (alarms) fetch failed") == 1  # visible, said once
+
+    async def test_first_ever_event_of_a_tracker_fires(self, hass):
+        entry = _make_entry(hass)
+        client = _client(trackers=[{"trackerId": 1}], events=[])
+        coord = GeoRideCoordinator(hass, entry, client)
+        fired = []
+        hass.bus.async_listen(EVENT_ALARM, lambda e: fired.append(e.data["type"]))
+        await coord._async_update_data()  # no event yet
+        client.get_events.return_value = [{"kind": "event/vibration/detected", "occurredAt": "2026-11-22T10:00:00.000Z"}]
+        await coord._async_update_data()
+        await hass.async_block_till_done()
+        assert fired == ["vibration/detected"]
+
     async def test_event_fetch_failure_is_ignored(self, hass):
         entry = _make_entry(hass)
         client = _client(trackers=[{"trackerId": 1}])
@@ -380,10 +402,7 @@ class TestTrackerEvents:
 class TestLastTripMetrics:
     async def test_latest_trip_gets_metrics(self, hass):
         entry = _make_entry(hass)
-        client = _client(
-            trackers=[{"trackerId": 1}],
-            trips=[{"id": "trip_1", "endTime": "2026-09-13T17:32:41Z"}],
-        )
+        client = _client(trackers=[{"trackerId": 1}], last_trip={"id": "trip_1", "endTime": "2026-09-13T17:32:41Z"})
         client.add_trip_metrics = AsyncMock(
             side_effect=lambda tid, trip: {**trip, "averageSpeed": 61}
         )
@@ -393,11 +412,64 @@ class TestLastTripMetrics:
 
     async def test_metrics_failure_keeps_trip(self, hass):
         entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1}], trips=[{"id": "trip_1"}])
+        client = _client(trackers=[{"trackerId": 1}], last_trip={"id": "trip_1"})
         client.add_trip_metrics = AsyncMock(side_effect=GeoRideError("404"))
         coord = GeoRideCoordinator(hass, entry, client)
         await coord._async_update_data()
         assert coord.last_trips[1] == {"id": "trip_1"}
+
+
+class TestRemoveDevice:
+    async def test_only_devices_gone_from_the_account_can_be_deleted(self, hass):
+        from homeassistant.helpers import device_registry as dr
+
+        from custom_components.georide_ha import async_remove_config_entry_device
+
+        entry = _make_entry(hass)
+        entry.runtime_data = MagicMock(data={1: {}}, beacons={1: [{"id": "beacon_1"}]})
+        registry = dr.async_get(hass)
+        make = lambda ident: registry.async_get_or_create(config_entry_id=entry.entry_id, identifiers={(DOMAIN, ident)})
+        assert await async_remove_config_entry_device(hass, entry, make("1")) is False
+        assert await async_remove_config_entry_device(hass, entry, make("beacon-beacon_1")) is False
+        assert await async_remove_config_entry_device(hass, entry, make("2")) is True
+
+
+class TestUidBase:
+    """A vehicle shared between two accounts in the same HA must not reuse unique ids."""
+
+    async def test_plain_tracker_id_by_default(self, hass):
+        coord = GeoRideCoordinator(hass, _make_entry(hass), _client())
+        assert coord.uid_base(1) == "1"
+
+    async def test_suffixed_when_another_entry_has_the_vehicle(self, hass):
+        from homeassistant.helpers import entity_registry as er
+
+        owner = _make_entry(hass)
+        er.async_get(hass).async_get_or_create("device_tracker", DOMAIN, "1", config_entry=owner)
+        member = MockConfigEntry(domain=DOMAIN, unique_id="friend@example.com", data={})
+        member.add_to_hass(hass)
+        coord = GeoRideCoordinator(hass, member, _client())
+        assert coord.uid_base(1) == f"1@{member.entry_id}"
+        assert coord.uid_base(2) == "2"
+
+    async def test_suffix_kept_once_registered(self, hass):
+        """Even after the other entry is gone, the ids already used stay the same."""
+        from homeassistant.helpers import entity_registry as er
+
+        member = _make_entry(hass)
+        er.async_get(hass).async_get_or_create(
+            "device_tracker", DOMAIN, f"1@{member.entry_id}", config_entry=member
+        )
+        coord = GeoRideCoordinator(hass, member, _client())
+        assert coord.uid_base(1) == f"1@{member.entry_id}"
+
+    async def test_own_plain_entity_stays_plain(self, hass):
+        from homeassistant.helpers import entity_registry as er
+
+        entry = _make_entry(hass)
+        er.async_get(hass).async_get_or_create("device_tracker", DOMAIN, "1", config_entry=entry)
+        coord = GeoRideCoordinator(hass, entry, _client())
+        assert coord.uid_base(1) == "1"
 
 
 class TestStaleMaintenanceCleanup:

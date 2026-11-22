@@ -19,6 +19,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
@@ -45,16 +46,8 @@ _LOGGER = logging.getLogger(__name__)
 UPDATE_INTERVAL = timedelta(seconds=60)
 SUBSCRIPTION_WARNING_WINDOW = timedelta(days=7)
 
-# How often we re-fetch the per-tracker trip list to refresh the
-# `last_trip_*` sensors. Polling the trackers is cheap, but trip lists
-# can hold dozens of items per tracker; capping at 5 minutes is a polite
-# trade-off — fresh enough for "last trip" semantics, light on the API.
+# How often the `last_trip_*` sensors look for a newer trip (one call per tracker).
 LAST_TRIPS_REFRESH = timedelta(minutes=5)
-LAST_TRIPS_LOOKBACK = timedelta(days=2)
-# Until a trip is known for a tracker, look back far enough to find the latest
-# ride after a long break (winter storage, HA restart); afterwards the short
-# window above only has to catch new trips.
-LAST_TRIPS_INITIAL_LOOKBACK = timedelta(days=365)
 
 # Maintenance items and beacons change rarely (user edits them in the GeoRide
 # app). 15 minutes is a polite interval that still picks up changes promptly.
@@ -96,23 +89,32 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         self._maintenance_fetched_at: datetime | None = None
         # Newest tracker event already seen, per tracker (ISO 8601, sortable).
         self._last_event_at: dict[int, str] = {}
+        # Trackers whose beacon fetch is failing: logged once, not every refresh.
+        self._failing: set[tuple[str, int]] = set()
+        self._uid_bases: dict[int, str] = {}
 
     async def _async_update_data(self) -> TrackersById:
         try:
             trackers = await self.client.get_trackers()
         except GeoRideAuthError as err:
-            raise ConfigEntryAuthFailed(str(err)) from err
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="auth_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         except (GeoRideConnectionError, GeoRideError) as err:
-            raise UpdateFailed(str(err)) from err
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
         indexed: TrackersById = {}
         for tracker in trackers:
-            tid = tracker.get("trackerId") or tracker.get("id")
+            tid = tracker.get("trackerId")
             if tid is None:
-                _LOGGER.warning(
-                    "Skipping tracker without trackerId; keys=%s",
-                    sorted(tracker.keys()),
-                )
+                # Seen on no model so far; said once, not every minute.
+                self._report("tracker id", 0, GeoRideError(f"no realtimeId for {tracker.get('trackerName')}"))
                 continue
             indexed[int(tid)] = tracker
 
@@ -133,12 +135,10 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
     async def _maybe_refresh_last_trips(self, trackers: TrackersById) -> None:
         """Refresh last_trips at most every LAST_TRIPS_REFRESH window.
 
-        Stores `self.last_trips[tracker_id]` = most recent trip dict (by
-        `endTime`). The last trip stays in place when the short window comes
-        back empty: an empty window only means no new ride, and dropping the
-        trip there made every last-trip sensor go unknown two days after a
-        ride. None means no trip in the initial year-long lookback. A failed
-        fetch keeps the previous snapshot so the sensors don't flash unknown.
+        Stores `self.last_trips[tracker_id]` = the most recent trip, with its
+        metrics (fetched once per trip), or None when the vehicle has no trip.
+        A failed fetch keeps the previous snapshot so the sensors don't flash
+        unknown.
         """
         now = datetime.now(tz=timezone.utc)
         if (
@@ -147,30 +147,22 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         ):
             return
 
-        to_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         for tid in trackers:
-            known = self.last_trips.get(tid) is not None
-            lookback = LAST_TRIPS_LOOKBACK if known else LAST_TRIPS_INITIAL_LOOKBACK
-            from_iso = (now - lookback).strftime("%Y-%m-%dT%H:%M:%SZ")
             try:
-                trips = await self.client.get_trips(tid, from_iso, to_iso)
-            except (GeoRideAuthError, GeoRideConnectionError, GeoRideError) as err:
-                _LOGGER.debug(
-                    "Last-trip fetch failed for tracker %s: %s — keeping previous",
-                    tid,
-                    err,
-                )
+                latest = await self.client.get_last_trip(tid)
+            except GeoRideError as err:
+                self._report("last trip", tid, err)
                 continue
-            if trips:
-                trips.sort(key=lambda t: t.get("endTime") or "", reverse=True)
-                latest = trips[0]
+            self._report("last trip", tid)
+            known = self.last_trips.get(tid)
+            if latest is not None and known is not None and known.get("id") == latest.get("id"):
+                continue  # same trip: its metrics are already there
+            if latest is not None:
                 try:
                     latest = await self.client.add_trip_metrics(tid, latest)
                 except GeoRideError as err:
                     _LOGGER.debug("Trip metrics fetch failed for %s: %s", tid, err)
-                self.last_trips[tid] = latest
-            elif not known:
-                self.last_trips[tid] = None
+            self.last_trips[tid] = latest
         self._last_trips_fetched_at = now
 
     async def _maybe_refresh_maintenance(self, trackers: TrackersById) -> None:
@@ -190,13 +182,10 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         for tid in trackers:
             try:
                 items = await self.client.get_maintenance(tid)
-            except (GeoRideAuthError, GeoRideConnectionError, GeoRideError) as err:
-                _LOGGER.debug(
-                    "Maintenance fetch failed for tracker %s: %s — keeping previous",
-                    tid,
-                    err,
-                )
+            except GeoRideError as err:
+                self._report("maintenance", tid, err)
                 continue
+            self._report("maintenance", tid)
             self.maintenance[tid] = items
         await self._refresh_beacons(trackers)
         self._maintenance_fetched_at = now
@@ -221,7 +210,8 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
                 ir.async_delete_issue(self.hass, DOMAIN, issue_id)
                 continue
 
-            if now < expires < now + SUBSCRIPTION_WARNING_WINDOW:
+            # Kept once the date has passed: the tracker stops working then.
+            if expires < now + SUBSCRIPTION_WARNING_WINDOW:
                 ir.async_create_issue(
                     self.hass,
                     DOMAIN,
@@ -248,10 +238,13 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
             try:
                 events = await self.client.get_events(tid)
             except GeoRideError as err:
-                _LOGGER.debug("Events fetch failed for tracker %s: %s", tid, err)
+                self._report("events (alarms)", tid, err)
                 continue
+            self._report("events (alarms)", tid)
             stamps = [e["occurredAt"] for e in events if isinstance(e.get("occurredAt"), str)]
             if not stamps:
+                # Still "seen": the tracker's very first event must fire, not be the baseline.
+                self._last_event_at.setdefault(tid, "")
                 continue
             last = self._last_event_at.get(tid)
             self._last_event_at[tid] = max(stamps + ([last] if last else []))
@@ -286,16 +279,47 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
         for tid in trackers:
             try:
                 new_beacons[tid] = await self.client.get_tracker_beacons(tid)
-            except (GeoRideAuthError, GeoRideConnectionError, GeoRideError) as err:
-                _LOGGER.warning(
-                    "GeoRide beacons fetch failed for tracker %s: %s — keeping last snapshot",
-                    tid,
-                    err,
-                )
+            except GeoRideError as err:
+                self._report("beacons", tid, err)
                 new_beacons[tid] = self.beacons.get(tid, [])
+                continue
+            self._report("beacons", tid)
         self.beacons = new_beacons
 
+    def uid_base(self, tid: int) -> str:
+        """Prefix of this tracker's entity unique ids.
+
+        `tid`, unless the same vehicle (shared between two GeoRide accounts) is
+        already in another entry of this Home Assistant: unique ids must differ,
+        so this entry then uses `tid@entry_id`. Decided once and kept, since the
+        registry remembers which entry registered first.
+        """
+        if tid not in self._uid_bases:
+            registry = er.async_get(self.hass)
+            entry_id = self.config_entry.entry_id
+            suffixed = f"{tid}@{entry_id}"
+            plain = registry.async_get_entity_id("device_tracker", DOMAIN, str(tid))
+            taken = plain is not None and registry.entities[plain].config_entry_id != entry_id
+            already = registry.async_get_entity_id("device_tracker", DOMAIN, suffixed)
+            self._uid_bases[tid] = suffixed if taken or already else str(tid)
+        return self._uid_bases[tid]
+
+    def _report(self, what: str, tid: int, err: Exception | None = None) -> None:
+        """Log a secondary fetch that starts failing (once) and when it works again.
+
+        The previous values are kept meanwhile; without this a dead alarm feed
+        would only show at debug level.
+        """
+        key = (what, tid)
+        if err is not None and key not in self._failing:
+            self._failing.add(key)
+            _LOGGER.warning("GeoRide %s fetch failed for tracker %s: %s — keeping previous", what, tid, err)
+        elif err is None and key in self._failing:
+            self._failing.discard(key)
+            _LOGGER.info("GeoRide %s fetch works again for tracker %s", what, tid)
+
     def _fire(self, event: str, data: dict[str, Any]) -> None:
+        _LOGGER.debug("Firing %s %s", event, {k: v for k, v in data.items() if k != "device_id"})
         self.hass.bus.async_fire(event, data)
         if self.config_entry.data.get(CONF_LEGACY):
             # Taken over from the 0.17 domain: its users' automations keep working.

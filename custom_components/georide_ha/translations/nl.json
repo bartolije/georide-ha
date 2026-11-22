@@ -20,7 +20,8 @@
         "title": "GeoRide — code invoeren",
         "description": "Voer de code in die GeoRide zojuist naar {email} heeft gestuurd.",
         "data": {
-          "otp": "Code"
+          "otp": "Code",
+          "resend": "Stuur me een nieuwe code"
         }
       }
     },
@@ -39,6 +40,11 @@
   "entity": {
     "binary_sensor": {
       "moving": { "name": "Beweegt" },
+      "plugged": { "name": "Voeding aangesloten" },
+      "online": { "name": "Tracker online" },
+      "maintenance_mode": { "name": "Onderhoudsmodus" },
+      "emergency_call": { "name": "Noodoproep" },
+      "friend_call": { "name": "Oproep naar naasten" },
       "stolen": { "name": "Gestolen" },
       "crashed": { "name": "Val gedetecteerd" },
       "has_beacon": { "name": "Beacon gekoppeld" },
@@ -52,6 +58,8 @@
       "altitude": { "name": "Hoogte" },
       "external_battery_voltage": { "name": "Externe accuspanning" },
       "internal_battery_voltage": { "name": "Interne accuspanning" },
+      "internal_battery": { "name": "Batterij tracker" },
+      "vibration_sensitivity": { "name": "Trillingsgevoeligheid" },
       "subscription_expires": { "name": "Abonnement verloopt" },
       "last_trip_end": { "name": "Einde laatste rit" },
       "last_trip_distance": { "name": "Afstand laatste rit" },
@@ -63,10 +71,28 @@
       "beacon_last_seen": { "name": "Laatste accu-rapport" }
     },
     "switch": {
-      "eco_mode": { "name": "Eco-modus" }
+      "eco_mode": { "name": "Eco-modus" },
+      "fall_detector": { "name": "Valdetectie" },
+      "sleep_mode": { "name": "Slaapmodus" }
+    },
+    "number": {
+      "cutoff_voltage": { "name": "Uitschakelspanning accu" }
+    },
+    "update": {
+      "firmware": { "name": "Firmware" },
+      "ble_firmware": { "name": "Bluetooth-firmware" }
     }
   },
   "exceptions": {
+    "update_failed": {
+      "message": "Kan de GeoRide-gegevens niet bijwerken: {error}"
+    },
+    "auth_failed": {
+      "message": "GeoRide-sessie verlopen of geweigerd: {error}"
+    },
+    "legacy_entry_busy": {
+      "message": "Wachten tot de oude GeoRide-vermelding {title} klaar is met laden"
+    },
     "token_rejected": {
       "message": "GeoRide weigerde het opgeslagen token: {error}"
     },
@@ -88,8 +114,8 @@
   },
   "issues": {
     "subscription_expiring": {
-      "title": "GeoRide-abonnement verloopt binnenkort",
-      "description": "Het GeoRide-abonnement voor **{tracker_name}** verloopt op **{expires}**. Vernieuw het op tijd via georide.fr om tracking, alarmen en de afstandsvergrendeling te behouden."
+      "title": "GeoRide-abonnement verlengen",
+      "description": "Het GeoRide-abonnement voor **{tracker_name}** eindigt of eindigde op **{expires}**. Verleng het op georide.fr om tracking, meldingen en vergrendeling te behouden."
     }
   },
   "services": {
@@ -99,11 +125,11 @@
       "fields": {
         "start_date": {
           "name": "Startdatum",
-          "description": "Eerste dag, inclusief (UTC)."
+          "description": "Eerste dag, inclusief (tijdzone van Home Assistant)."
         },
         "end_date": {
           "name": "Einddatum",
-          "description": "Laatste dag, inclusief (UTC)."
+          "description": "Laatste dag, inclusief (tijdzone van Home Assistant)."
         },
         "tracker_id": {
           "name": "Tracker-ID",

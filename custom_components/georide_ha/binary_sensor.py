@@ -1,4 +1,8 @@
-"""GeoRide binary_sensor platform: lock, moving, stolen, crashed, has_beacon."""
+"""GeoRide binary_sensor platform: moving, power plugged, stolen, online, …
+
+An entity without a value is unavailable: crashed and the beacon firmware
+flag have no source in the v2 API (disabled by default).
+"""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -44,15 +48,51 @@ BINARY_SENSORS: tuple[GeoRideBinarySensorEntityDescription, ...] = (
         value_fn=lambda d: _bool(d.get("moving")),
     ),
     GeoRideBinarySensorEntityDescription(
+        # Off when the tracker loses the bike's power: cable cut or battery removed.
+        key="plugged",
+        translation_key="plugged",
+        device_class=BinarySensorDeviceClass.PLUG,
+        value_fn=lambda d: _bool(d.get("isPlugged")),
+    ),
+    GeoRideBinarySensorEntityDescription(
         key="stolen",
         translation_key="stolen",
+        # On while a theft is declared to GeoRide's assistance.
         device_class=BinarySensorDeviceClass.SAFETY,
         value_fn=lambda d: _bool(d.get("isStolen")),
+    ),
+    GeoRideBinarySensorEntityDescription(
+        key="online",
+        translation_key="online",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _bool(d.get("online")),
+    ),
+    GeoRideBinarySensorEntityDescription(
+        key="maintenance_mode",
+        translation_key="maintenance_mode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _bool(d.get("maintenanceMode")),
+    ),
+    GeoRideBinarySensorEntityDescription(
+        key="emergency_call",
+        translation_key="emergency_call",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _bool(d.get("emergencyCallEnabled")),
+    ),
+    GeoRideBinarySensorEntityDescription(
+        key="friend_call",
+        translation_key="friend_call",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _bool(d.get("friendCallEnabled")),
     ),
     GeoRideBinarySensorEntityDescription(
         key="crashed",
         translation_key="crashed",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        entity_registry_enabled_default=False,  # no source in the v2 API
         value_fn=lambda d: _bool(d.get("isCrashed")),
     ),
     GeoRideBinarySensorEntityDescription(
@@ -70,6 +110,7 @@ BEACON_BINARY_SENSORS: tuple[GeoRideBinarySensorEntityDescription, ...] = (
         key="firmware_update",
         translation_key="beacon_firmware_update",
         device_class=BinarySensorDeviceClass.UPDATE,
+        entity_registry_enabled_default=False,  # no source in the v2 API
         # UPDATE device_class: on = update available. GeoRide's isUpdated
         # field is True when firmware is up to date, so we invert.
         value_fn=lambda d: (
@@ -131,11 +172,15 @@ class GeoRideBinarySensor(GeoRideEntity, BinarySensorEntity):
     ) -> None:
         super().__init__(coordinator, tracker_id)
         self.entity_description = description
-        self._attr_unique_id = f"{tracker_id}-{description.key}"
+        self._attr_unique_id = f"{self._uid}-{description.key}"
 
     @property
     def is_on(self) -> bool | None:
         return self.entity_description.value_fn(self._tracker)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.is_on is not None
 
 
 class GeoRideBeaconBinarySensor(GeoRideBeaconEntity, BinarySensorEntity):
@@ -150,8 +195,12 @@ class GeoRideBeaconBinarySensor(GeoRideBeaconEntity, BinarySensorEntity):
     ) -> None:
         super().__init__(coordinator, tracker_id, beacon_id)
         self.entity_description = description
-        self._attr_unique_id = f"beacon-{beacon_id}-{description.key}"
+        self._attr_unique_id = f"{self._uid}-{description.key}"
 
     @property
     def is_on(self) -> bool | None:
         return self.entity_description.value_fn(self._beacon)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.is_on is not None

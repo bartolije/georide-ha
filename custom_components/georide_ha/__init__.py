@@ -16,7 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import IntegrationNotFound, async_get_integration
 
-from .api import GeoRideApiClient
+from .api import GeoRideApiClient, GeoRideError
 from .const import CONF_LEGACY, DOCUMENTATION_URL, DOMAIN, LEGACY_DOMAIN, PLATFORMS
 from .coordinator import GeoRideCoordinator
 from .services import async_setup_services
@@ -48,6 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Own session without cookie jar: the session cookie is sent explicitly,
     # so two GeoRide accounts can't leak into each other through a shared jar.
     session = async_create_clientsession(hass, cookie_jar=aiohttp.DummyCookieJar())
+    entry.async_on_unload(session.close)  # otherwise only closed when HA stops
     client = GeoRideApiClient(session, token=entry.data[CONF_TOKEN])
     coordinator = GeoRideCoordinator(hass, entry, client)
 
@@ -58,17 +59,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.runtime_data = coordinator
 
-    _cleanup_stale_devices(
-        hass,
-        entry,
-        tracker_ids=set(coordinator.data),
-        beacon_ids={
-            b["id"]
-            for beacons in coordinator.beacons.values()
-            for b in beacons
-            if isinstance(b.get("id"), (int, str))
-        },
-    )
+    _cleanup_stale_devices(hass, entry, _current_identifiers(coordinator))
     _cleanup_stale_maintenance(hass, entry, coordinator)
 
     _LOGGER.info(
@@ -84,6 +75,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """End the GeoRide session when the integration is deleted (best effort)."""
+    if any(
+        other.data.get(CONF_TOKEN) == entry.data.get(CONF_TOKEN)
+        for domain in (DOMAIN, LEGACY_DOMAIN)
+        for other in hass.config_entries.async_entries(domain)
+    ):
+        return  # the session moved to another entry (0.17 takeover)
+    session = async_create_clientsession(hass, cookie_jar=aiohttp.DummyCookieJar())
+    try:
+        await GeoRideApiClient(session, token=entry.data.get(CONF_TOKEN)).sign_out()
+    except GeoRideError as err:
+        _LOGGER.debug("GeoRide sign-out failed, the session will expire on its own: %s", err)
+    finally:
+        await session.close()
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device: dr.DeviceEntry
+) -> bool:
+    """Let the user delete a device only once it is no longer in the GeoRide account."""
+    return not device.identifiers & _current_identifiers(entry.runtime_data)
+
+
+def _current_identifiers(coordinator: GeoRideCoordinator) -> set[tuple[str, str]]:
+    """Device identifiers of the trackers and beacons GeoRide currently returns."""
+    return {(DOMAIN, str(tid)) for tid in coordinator.data} | {
+        (DOMAIN, f"beacon-{b['id']}")
+        for beacons in coordinator.beacons.values()
+        for b in beacons
+        if isinstance(b.get("id"), (int, str))
+    }
 
 
 async def _async_adopt_legacy_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -109,7 +134,11 @@ async def _async_adopt_legacy_entry(hass: HomeAssistant, entry: ConfigEntry) -> 
         try:
             await hass.config_entries.async_unload(old.entry_id)
         except OperationNotAllowed as err:  # old entry still setting up: retry shortly
-            raise ConfigEntryNotReady(f"waiting for the old {old.title} entry") from err
+            raise ConfigEntryNotReady(
+                translation_domain=DOMAIN,
+                translation_key="legacy_entry_busy",
+                translation_placeholders={"title": old.title},
+            ) from err
         # Entities first: detaching a device from the old entry deletes its entities.
         for ent in er.async_entries_for_config_entry(entity_registry, old.entry_id):
             if entity_registry.async_get_entity_id(ent.domain, DOMAIN, ent.unique_id):
@@ -140,22 +169,14 @@ async def _async_adopt_legacy_entry(hass: HomeAssistant, entry: ConfigEntry) -> 
 
 
 def _cleanup_stale_devices(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    *,
-    tracker_ids: set[int],
-    beacon_ids: set[int | str],
+    hass: HomeAssistant, entry: ConfigEntry, valid_identifiers: set[tuple[str, str]]
 ) -> None:
-    """Drop devices whose tracker_id or beacon_id is no longer in GeoRide.
+    """Drop devices whose tracker or beacon is no longer in GeoRide.
 
-    Runs once at setup. Dynamic addition of newly-appeared trackers / beacons
-    between setups is a separate concern handled by a future coordinator
-    listener.
+    Runs once at setup; in between, the user can delete such a device from its
+    page (async_remove_config_entry_device).
     """
     device_registry = dr.async_get(hass)
-    valid_identifiers = {(DOMAIN, str(tid)) for tid in tracker_ids} | {
-        (DOMAIN, f"beacon-{bid}") for bid in beacon_ids
-    }
     for device in dr.async_entries_for_config_entry(
         device_registry, entry.entry_id
     ):

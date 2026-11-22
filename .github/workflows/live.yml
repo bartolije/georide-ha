@@ -1,0 +1,28 @@
+name: Live API
+
+# Read-only calls to the real GeoRide API with a dedicated session: tells us
+# when GeoRide changes a route before users do. Skipped without the secret.
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: live (read-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Run the live tests
+        env:
+          GEORIDE_SESSION: ${{ secrets.GEORIDE_SESSION }}
+        run: |
+          if [ -z "$GEORIDE_SESSION" ]; then echo "No GEORIDE_SESSION secret: skipped."; exit 0; fi
+          pip install pytest pytest-asyncio aiohttp
+          python -m pytest tests/test_api_live.py -m live -p no:cacheprovider

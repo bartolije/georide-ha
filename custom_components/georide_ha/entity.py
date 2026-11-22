@@ -19,13 +19,15 @@ class GeoRideEntity(CoordinatorEntity[GeoRideCoordinator]):
     def __init__(self, coordinator: GeoRideCoordinator, tracker_id: int) -> None:
         super().__init__(coordinator)
         self._tracker_id = tracker_id
+        # Prefix of the unique ids (see GeoRideCoordinator.uid_base).
+        self._uid = coordinator.uid_base(tracker_id)
         tracker = coordinator.data[tracker_id]
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(tracker_id))},
             name=tracker.get("trackerName") or f"GeoRide {tracker_id}",
             manufacturer=MANUFACTURER,
             model=tracker.get("model"),
-            sw_version=tracker.get("version") or tracker.get("softwareVersion"),
+            sw_version=str(fw) if (fw := tracker.get("firmwareVersion")) is not None else None,
         )
 
     @property
@@ -55,6 +57,9 @@ class GeoRideBeaconEntity(CoordinatorEntity[GeoRideCoordinator]):
         super().__init__(coordinator)
         self._tracker_id = tracker_id
         self._beacon_id = beacon_id
+        # Prefix of the unique ids; suffixed like the tracker's when the vehicle is in two entries.
+        base = coordinator.uid_base(tracker_id)
+        self._uid = f"beacon-{beacon_id}" + base.removeprefix(str(tracker_id))
 
         beacon = self._beacon
         connections: set[tuple[str, str]] = set()

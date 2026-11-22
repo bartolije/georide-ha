@@ -127,6 +127,17 @@ class TestTripSummaryHappyPath:
         assert list(result["trackers"].keys()) == ["2"]
 
 
+class TestTripSummaryTimeZone:
+    async def test_dates_are_local_days(self, hass):
+        """1 to 30 April in Paris = 31 March 22:00 UTC to 30 April 21:59:59 UTC."""
+        await hass.config.async_set_time_zone("Europe/Paris")
+        _, _, client = _entry(hass)
+        await services.async_setup_services(hass)
+        result = await _call_service(hass, start_date=date(2026, 4, 1), end_date=date(2026, 4, 30))
+        assert client.get_trips.call_args.args[1:3] == ("2026-03-31T22:00:00Z", "2026-04-30T21:59:59Z")
+        assert result["range"] == {"from": "2026-03-31T22:00:00Z", "to": "2026-04-30T21:59:59Z"}
+
+
 class TestTripSummaryErrors:
     async def test_invalid_date_range_raises_validation_error(self, hass):
         _entry(hass)

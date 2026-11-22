@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -34,6 +35,9 @@ SESSION_COOKIE = "__Secure-georide-auth.session_token"
 MOVING_FIX_AGE = timedelta(minutes=5)
 
 TRIPS_PAGE_SIZE = 100  # API maximum
+# Subscription and mode change rarely (the mode only after a command, see _command):
+# read them every 15 min instead of every poll.
+SLOW_DATA_TTL = 900  # seconds
 METRICS_CONCURRENCY = 5
 
 
@@ -70,6 +74,8 @@ class GeoRideApiClient:
         self._unsupported: set[str] = set()
         # Vehicles whose own data this account may not read (shared vehicles): not asked again.
         self._skipped: set[str] = set()
+        # path → (monotonic time, value) for the slow-changing reads.
+        self._slow: dict[str, tuple[float, Any]] = {}
 
     @property
     def token(self) -> str | None:
@@ -90,13 +96,14 @@ class GeoRideApiClient:
                 json={"email": email, "otp": otp},
                 timeout=_TIMEOUT,
             ) as resp:
+                _LOGGER.debug("POST /auth/otp/verify -> %s", resp.status)
                 if resp.status in (400, 401, 403, 422):
                     raise GeoRideAuthError(f"GeoRide rejected the code (HTTP {resp.status})")
                 if resp.status >= 400:
                     raise GeoRideConnectionError(f"HTTP {resp.status} on /auth/otp/verify")
                 token = _session_cookie(resp.headers.getall("Set-Cookie", []))
-        except ClientError as err:
-            raise GeoRideConnectionError(str(err)) from err
+        except (ClientError, TimeoutError) as err:
+            raise GeoRideConnectionError(str(err) or type(err).__name__) from err
         if not token:
             raise GeoRideAuthError("Code accepted but no session cookie returned")
         self._token = token
@@ -119,7 +126,7 @@ class GeoRideApiClient:
                     self._request("GET", f"/v1/vehicles/{vid}"),
                     self._request("GET", f"/v1/trackers/{trid}"),
                     self._optional(f"/v1/trackers/{trid}/battery"),
-                    self._optional(f"/v1/trackers/{trid}/settings/mode"),
+                    self._optional_slow(f"/v1/trackers/{trid}/settings/mode"),
                     self._optional(f"/v1/trackers/{trid}/manual-lock"),
                 )
             except GeoRideNotSupportedError as err:
@@ -129,13 +136,56 @@ class GeoRideApiClient:
                 continue
             expires = None
             if tracker.get("subscriptionId"):
-                sub = await self._optional(f"/v1/subscriptions/{tracker['subscriptionId']}")
+                sub = await self._optional_slow(f"/v1/subscriptions/{tracker['subscriptionId']}")
                 expires = ((sub or {}).get("dates") or {}).get("expiresAt")
             payload = _tracker_payload(vehicle, tracker, battery, mode, lock, expires)
+            payload.update(await self._settings(trid))
             if isinstance(payload.get("trackerId"), int):
                 self._ids[payload["trackerId"]] = (vid, trid)
             trackers.append(payload)
         return trackers
+
+    async def _settings(self, trid: str) -> dict[str, Any]:
+        """Firmware, settings and theft report of a tracker, read every SLOW_DATA_TTL.
+
+        Each key is None when the tracker model or this account lacks the resource.
+        """
+        base = f"/v1/trackers/{trid}"
+        theft_path = f"{base}/assistance/theft/report"
+        firmware, sleep, maintenance, cutoff, vibration, fall, ecall, theft = await asyncio.gather(
+            self._optional_slow(f"{base}/firmware-update"),
+            self._optional_slow(f"{base}/settings/sleep-mode"),
+            self._optional_slow(f"{base}/settings/maintenance-mode"),
+            self._optional_slow(f"{base}/settings/cutoff-voltage"),
+            self._optional_slow(f"{base}/settings/vibration-sensitivity"),
+            self._optional_slow(f"{base}/settings/fall-detector"),
+            self._optional_slow(f"{base}/ecall"),
+            self._optional_slow(theft_path),
+        )
+        stm, nrf = (firmware or {}).get("stm") or {}, (firmware or {}).get("nrf") or {}
+        millivolts = (cutoff or {}).get("cutoffVoltage")
+        return {
+            "firmwareVersion": stm.get("currentVersion"),
+            "firmwareLatest": stm.get("latestVersion"),
+            "bleFirmwareVersion": nrf.get("currentVersion"),
+            "bleFirmwareLatest": nrf.get("latestVersion"),
+            "sleepMode": (sleep or {}).get("enabled"),
+            "sleepModePending": (sleep or {}).get("pending"),
+            "maintenanceMode": (maintenance or {}).get("enabled"),
+            "cutoffVoltage": millivolts / 1000 if isinstance(millivolts, (int, float)) else None,
+            "vibrationSensitivity": (vibration or {}).get("vibrationSensitivity"),
+            "fallDetector": (fall or {}).get("enabled"),
+            "emergencyCallEnabled": (ecall or {}).get("emergencyCallEnabled"),
+            "friendCallEnabled": (ecall or {}).get("friendCallEnabled"),
+            # The report route answers null when no theft is declared.
+            "isStolen": None if theft_path in self._unsupported else theft is not None,
+        }
+
+    async def get_session_expiry(self) -> str | None:
+        """When the session ends (ISO 8601); it slides forward while it is used."""
+        session = await self._request("GET", "/auth/session")
+        expires = session.get("expiresAt") if isinstance(session, dict) else None
+        return expires if isinstance(expires, str) else None
 
     async def get_trips(
         self,
@@ -174,6 +224,15 @@ class GeoRideApiClient:
 
             trips = list(await asyncio.gather(*(_one(t) for t in trips)))
         return trips
+
+    async def get_last_trip(self, tracker_id: int) -> dict[str, Any] | None:
+        """Return the most recent trip (one call), or None if the vehicle has none."""
+        vid = self._vehicle_id(tracker_id)
+        page = await self._request(
+            "GET", f"/v1/vehicles/{vid}/trips", params={"limit": "1", "sort": "startTime:desc"}
+        )
+        trips = page.get("data") or []
+        return trips[0] if trips else None
 
     async def add_trip_metrics(self, tracker_id: int, trip: dict[str, Any]) -> dict[str, Any]:
         """Return `trip` merged with its average speed and per-side max lean."""
@@ -221,13 +280,51 @@ class GeoRideApiClient:
         """Disable the manual lock."""
         await self._command(tracker_id, "manual-lock/disable")
 
-    async def eco_mode_on(self, tracker_id: int) -> None:
-        """Queue the switch to eco mode (applied at the tracker's next connection)."""
-        await self._command(tracker_id, "settings/mode/eco")
+    async def eco_mode_on(self, tracker_id: int) -> str | None:
+        """Queue the switch to eco mode; return when GeoRide expects it applied (ISO 8601).
 
-    async def eco_mode_off(self, tracker_id: int) -> None:
-        """Queue the switch back to the standard (running) mode."""
-        await self._command(tracker_id, "settings/mode/running")
+        The tracker applies it at its next connection, hours later when it sleeps.
+        """
+        return await self._mode_command(tracker_id, "eco")
+
+    async def eco_mode_off(self, tracker_id: int) -> str | None:
+        """Queue the switch back to the standard (running) mode; return the expected time."""
+        return await self._mode_command(tracker_id, "running")
+
+    async def set_cutoff_voltage(self, tracker_id: int, volts: float) -> None:
+        """Voltage of the bike's battery under which the tracker stops drawing from it.
+
+        Stored at once, sent to the tracker at its next connection.
+        """
+        await self._setting(tracker_id, "PATCH", "settings/cutoff-voltage", {"cutoffVoltage": round(volts * 1000)})
+
+    async def set_fall_detector(self, tracker_id: int, enabled: bool) -> None:
+        """Enable or disable the fall detector."""
+        await self._setting(tracker_id, "PATCH", "settings/fall-detector", {"enabled": enabled})
+
+    async def set_sleep_mode(self, tracker_id: int, enabled: bool) -> None:
+        """Queue the sleep mode on or off (applied at the tracker's next connection)."""
+        # shortcut: only `off` was called against a real tracker (already off); `on` is the mirror route.
+        await self._setting(tracker_id, "POST", f"settings/sleep-mode/{'on' if enabled else 'off'}", None, "settings/sleep-mode")
+
+    async def sign_out(self) -> None:
+        """End the session on GeoRide's side (the cookie stops working)."""
+        await self._request("POST", "/auth/sign-out", json={})
+        self._token = None
+
+    async def _setting(
+        self, tracker_id: int, method: str, action: str, body: dict[str, Any] | None, read: str | None = None
+    ) -> None:
+        trid = self._tracker_id(tracker_id)
+        await self._request(method, f"/v1/trackers/{trid}/{action}", json=body)
+        self._slow.pop(f"/v1/trackers/{trid}/{read or action}", None)  # read it fresh again
+
+    async def _mode_command(self, tracker_id: int, mode: str) -> str | None:
+        trid = self._tracker_id(tracker_id)
+        self._slow.pop(f"/v1/trackers/{trid}/settings/mode", None)  # read it fresh again
+        answer = await self._command(tracker_id, f"settings/mode/{mode}")
+        eta = answer.get("eta") if isinstance(answer, dict) else None
+        return eta if isinstance(eta, str) else None
 
     # -- plumbing -----------------------------------------------------------
 
@@ -243,8 +340,8 @@ class GeoRideApiClient:
         except (KeyError, ValueError) as err:
             raise GeoRideError(f"Unknown tracker {tracker_id}; refresh trackers first") from err
 
-    async def _command(self, tracker_id: int, action: str) -> None:
-        await self._request("POST", f"/v1/trackers/{self._tracker_id(tracker_id)}/{action}")
+    async def _command(self, tracker_id: int, action: str) -> Any:
+        return await self._request("POST", f"/v1/trackers/{self._tracker_id(tracker_id)}/{action}")
 
     async def _optional(self, path: str) -> Any:
         """GET that returns None when the tracker model lacks the feature."""
@@ -255,6 +352,22 @@ class GeoRideApiClient:
         except GeoRideNotSupportedError:
             self._unsupported.add(path)
             return None
+        except (GeoRideAuthError, GeoRideConnectionError):
+            raise
+        except GeoRideError as err:
+            # Optional data must never take the rest down (e.g. GeoRide drops a route).
+            self._unsupported.add(path)
+            _LOGGER.warning("GeoRide optional data unavailable, ignored until reload: %s", err)
+            return None
+
+    async def _optional_slow(self, path: str) -> Any:
+        """`_optional`, answered from memory for SLOW_DATA_TTL seconds."""
+        fetched = self._slow.get(path)
+        if fetched is not None and time.monotonic() - fetched[0] < SLOW_DATA_TTL:
+            return fetched[1]
+        value = await self._optional(path)
+        self._slow[path] = (time.monotonic(), value)
+        return value
 
     async def _request(
         self,
@@ -271,6 +384,7 @@ class GeoRideApiClient:
             if not self._token:
                 raise GeoRideAuthError("Not authenticated; log in with a code first")
             headers["Cookie"] = f"{SESSION_COOKIE}={self._token}"
+        started = time.monotonic()
         try:
             async with self._session.request(
                 method,
@@ -280,14 +394,19 @@ class GeoRideApiClient:
                 json=json,
                 timeout=_TIMEOUT,
             ) as resp:
+                ms = round((time.monotonic() - started) * 1000)
                 if resp.status < 400:
+                    # Debug trace of every call: no cookie, no body (bodies hold positions).
+                    _LOGGER.debug("%s %s -> %s in %s ms", method, path, resp.status, ms)
                     return await resp.json(content_type=None)
                 try:
                     code = (await resp.json(content_type=None) or {}).get("code")
                 except (ValueError, AttributeError):
                     code = None
-        except ClientError as err:
-            raise GeoRideConnectionError(str(err)) from err
+                _LOGGER.debug("%s %s -> %s %s in %s ms", method, path, resp.status, code, ms)
+        except (ClientError, TimeoutError) as err:
+            _LOGGER.debug("%s %s failed: %r", method, path, err)
+            raise GeoRideConnectionError(str(err) or type(err).__name__) from err
         # Only 401 means no valid session (checked: bad or missing cookie → 401 UNAUTHENTICATED).
         if resp.status == 401:
             raise GeoRideAuthError(f"Session rejected by GeoRide (HTTP {resp.status})")
@@ -342,6 +461,8 @@ def _tracker_payload(
         "online": tracker.get("online"),
         "capabilities": tracker.get("capabilities") or [],
         "externalBatteryVoltage": (battery or {}).get("external"),
+        "internalBatteryLevel": (battery or {}).get("internal"),
+        "isPlugged": (battery or {}).get("isPlugged"),
         "batteryUpdatedAt": (battery or {}).get("updatedAt"),
         "isInEco": current_mode == "eco" if current_mode else None,
         "isInElectricMode": current_mode == "electric" if current_mode else None,

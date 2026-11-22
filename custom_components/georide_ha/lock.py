@@ -54,7 +54,7 @@ class GeoRideLock(GeoRideEntity, LockEntity):
 
     def __init__(self, coordinator: GeoRideCoordinator, tracker_id: int) -> None:
         super().__init__(coordinator, tracker_id)
-        self._attr_unique_id = f"{tracker_id}-lock"
+        self._attr_unique_id = f"{self._uid}-lock"
 
     @property
     def is_locked(self) -> bool | None:

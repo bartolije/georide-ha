@@ -1,20 +1,56 @@
 {
   "entity": {
     "binary_sensor": {
-      "has_beacon": { "default": "mdi:key-wireless" }
+      "has_beacon": {
+        "default": "mdi:key-wireless"
+      },
+      "maintenance_mode": {
+        "default": "mdi:wrench"
+      },
+      "emergency_call": {
+        "default": "mdi:phone-alert"
+      },
+      "friend_call": {
+        "default": "mdi:phone-in-talk"
+      }
     },
     "sensor": {
-      "altitude": { "default": "mdi:image-filter-hdr" },
-      "last_trip_max_lean_angle": { "default": "mdi:angle-acute" }
+      "altitude": {
+        "default": "mdi:image-filter-hdr"
+      },
+      "last_trip_max_lean_angle": {
+        "default": "mdi:angle-acute"
+      },
+      "vibration_sensitivity": {
+        "default": "mdi:vibrate"
+      }
     },
     "switch": {
       "eco_mode": {
         "default": "mdi:leaf",
-        "state": { "off": "mdi:leaf-off" }
+        "state": {
+          "off": "mdi:leaf-off"
+        }
+      },
+      "fall_detector": {
+        "default": "mdi:motorbike-off"
+      },
+      "sleep_mode": {
+        "default": "mdi:sleep",
+        "state": {
+          "off": "mdi:sleep-off"
+        }
+      }
+    },
+    "number": {
+      "cutoff_voltage": {
+        "default": "mdi:battery-alert-variant-outline"
       }
     }
   },
   "services": {
-    "trip_summary": { "service": "mdi:chart-line" }
+    "trip_summary": {
+      "service": "mdi:chart-line"
+    }
   }
 }

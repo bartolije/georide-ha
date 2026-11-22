@@ -10,17 +10,10 @@ from typing import Any
 
 
 def meters_to_km(value: Any) -> float | None:
-    """Convert a raw distance to km. Returns None if not numeric.
-
-    GeoRide's API returns the odometer in meters when the value exceeds
-    1000; smaller values are assumed to already be km. The threshold
-    avoids divide-by-1000 on already-km payloads, but is a heuristic.
-    """
+    """Convert a distance in meters (every v2 distance) to km; None if not numeric."""
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
-    if value > 1000:
-        return round(float(value) / 1000.0, 2)
-    return round(float(value), 2)
+    return round(float(value) / 1000.0, 2)
 
 
 def voltage_to_battery_pct(

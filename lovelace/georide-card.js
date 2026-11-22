@@ -2,7 +2,7 @@
  * GeoRide bike card — single-file Lovelace custom card.
  *
  * Bundles the entities that this integration creates for one tracker
- * (device_tracker, lock, battery sensor, speed, odometer, last_seen, last
+ * (device_tracker, lock, battery sensors, power plug, odometer, last_seen, last
  * trip stats and the eco-mode switch) into one compact card.
  *
  * Install:
@@ -184,6 +184,9 @@ class GeoRideCard extends LitElement {
         "`image` must be an http(s):// URL or a local path (e.g. /local/bike.jpg)."
       );
     this._config = config;
+    // ha-map is lazy-loaded by HA's own map card: create one once so the element gets defined.
+    if (!customElements.get("ha-map"))
+      window.loadCardHelpers?.().then((h) => h.createCardElement({ type: "map", entities: ["zone.home"] }));
   }
 
   /**
@@ -222,14 +225,16 @@ class GeoRideCard extends LitElement {
     for (const entityId of Object.keys(entries)) {
       const entry = entries[entityId];
       if (entry.device_id !== want) continue;
-      const slug = (entry.unique_id || entityId).toLowerCase();
+      // translation_key survives renamed entity_ids; the frontend registry has no unique_id.
+      const slug = (entry.translation_key || entry.unique_id || entityId).toLowerCase();
       if (entityId.startsWith("device_tracker.")) found.tracker = entityId;
       else if (entityId.startsWith("lock.")) found.lock = entityId;
       else if (entityId.startsWith("siren.")) found.siren = entityId;
       else if (entityId.startsWith("switch.") && slug.endsWith("eco_mode")) found.eco = entityId;
+      else if (slug.endsWith("internal_battery")) found.trackerBattery = entityId;
+      else if (slug.endsWith("plugged")) found.plugged = entityId;
       else if (slug.endsWith("battery_level")) found.battery = entityId;
       else if (slug.endsWith("battery") && !slug.includes("voltage")) found.battery = found.battery || entityId;
-      else if (slug.endsWith("speed") && !slug.includes("last_trip")) found.speed = entityId;
       else if (slug.endsWith("odometer")) found.odometer = entityId;
       else if (slug.endsWith("last_seen")) found.lastSeen = entityId;
       else if (slug.endsWith("last_trip_distance")) found.tripDistance = entityId;
@@ -237,8 +242,6 @@ class GeoRideCard extends LitElement {
       else if (slug.endsWith("last_trip_max_speed")) found.tripMaxSpeed = entityId;
       else if (slug.endsWith("last_trip_end")) found.tripEnd = entityId;
       else if (slug.endsWith("moving")) found.moving = entityId;
-      else if (slug.endsWith("stolen")) found.stolen = entityId;
-      else if (slug.endsWith("crashed")) found.crashed = entityId;
     }
     return found;
   }
@@ -297,13 +300,14 @@ class GeoRideCard extends LitElement {
     const e = this._entities();
     const tracker = this._stateOf(e.tracker);
     const lock = this._stateOf(e.lock);
-    const stolen = this._stateOf(e.stolen)?.state === "on";
-    const crashed = this._stateOf(e.crashed)?.state === "on";
+    // Entities left over from older versions stay attached to the device, unavailable.
+    const usable = (id) => id && this._stateOf(id)?.state !== "unavailable";
+    // Off = the tracker lost the bike's power (cable cut, battery removed).
+    const unplugged = this._stateOf(e.plugged)?.state === "off";
     const moving = this._stateOf(e.moving)?.state === "on";
 
     let pill = null;
-    if (crashed) pill = html`<span class="pill alarm">CRASH</span>`;
-    else if (stolen) pill = html`<span class="pill alarm">STOLEN</span>`;
+    if (unplugged) pill = html`<span class="pill alarm">DÉBRANCHÉ</span>`;
     else if (moving) pill = html`<span class="pill unlocked">EN ROUTE</span>`;
     else if (lock?.state === "locked") pill = html`<span class="pill locked">VERROUILLÉ</span>`;
     else if (lock?.state === "unlocked") pill = html`<span class="pill unlocked">DÉVERROUILLÉ</span>`;
@@ -322,12 +326,12 @@ class GeoRideCard extends LitElement {
             : html`<div class="header">
                 <span class="name">${this._deviceName()}${pill}</span>
                 <div class="actions">
-                  ${e.lock
+                  ${usable(e.lock)
                     ? html`<ha-icon-button @click=${this._toggleLock} title="Toggle lock">
                         <ha-icon icon="${lock?.state === "locked" ? "mdi:lock" : "mdi:lock-open"}"></ha-icon>
                       </ha-icon-button>`
                     : ""}
-                  ${e.siren
+                  ${usable(e.siren)
                     ? html`<ha-icon-button @click=${this._triggerSiren} title="Trigger siren">
                         <ha-icon icon="mdi:alarm-light"></ha-icon>
                       </ha-icon-button>`
@@ -338,18 +342,19 @@ class GeoRideCard extends LitElement {
             ? html`<div class="header">
                 <span></span>
                 <div class="actions">
-                  ${e.lock
+                  ${usable(e.lock)
                     ? html`<ha-icon-button @click=${this._toggleLock} title="Toggle lock">
                         <ha-icon icon="${lock?.state === "locked" ? "mdi:lock" : "mdi:lock-open"}"></ha-icon>
                       </ha-icon-button>`
                     : ""}
-                  ${e.siren
+                  ${usable(e.siren)
                     ? html`<ha-icon-button @click=${this._triggerSiren} title="Trigger siren">
                         <ha-icon icon="mdi:alarm-light"></ha-icon>
                       </ha-icon-button>`
                     : ""}
                 </div>
-              </div>`}
+              </div>`
+            : ""}
 
           ${e.tracker && tracker?.attributes?.latitude
             ? html`<div class="map">
@@ -368,8 +373,8 @@ class GeoRideCard extends LitElement {
             <span class="value">${this._format(e.battery)}</span>
           </div>
           <div class="stat">
-            <span class="label">Vitesse</span>
-            <span class="value">${this._format(e.speed, "0 km/h")}</span>
+            <span class="label">Boîtier</span>
+            <span class="value">${this._format(e.trackerBattery)}</span>
           </div>
           <div class="stat">
             <span class="label">Compteur</span>

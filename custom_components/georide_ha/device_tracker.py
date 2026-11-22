@@ -46,7 +46,7 @@ class GeoRideDeviceTracker(GeoRideEntity, TrackerEntity):
 
     def __init__(self, coordinator: GeoRideCoordinator, tracker_id: int) -> None:
         super().__init__(coordinator, tracker_id)
-        self._attr_unique_id = str(tracker_id)
+        self._attr_unique_id = self._uid
 
     @property
     def source_type(self) -> SourceType:

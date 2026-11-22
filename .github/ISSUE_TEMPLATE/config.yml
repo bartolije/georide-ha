@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Problème avec le traceur, l'abonnement ou l'appli GeoRide
+    url: https://georide.com
+    about: Cette intégration n'est pas officielle. Pour le traceur lui-même, contacte le support GeoRide.

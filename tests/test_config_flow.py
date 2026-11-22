@@ -70,10 +70,10 @@ def _mock_client(*, verify_return=TOKEN, verify_raises=None, send_raises=None, t
         "custom_components.georide_ha.GeoRideApiClient", side_effect=_factory
     ), patch(
         "custom_components.georide_ha.config_flow.async_create_clientsession",
-        return_value=MagicMock(),
+        return_value=MagicMock(close=AsyncMock()),
     ), patch(
         "custom_components.georide_ha.async_create_clientsession",
-        return_value=MagicMock(),
+        return_value=MagicMock(close=AsyncMock()),
     ):
         yield clients
 
@@ -110,6 +110,41 @@ class TestUserFlow:
         assert result["data"] == {CONF_EMAIL: EMAIL, CONF_TOKEN: TOKEN}
         clients[0].verify_otp.assert_awaited_once_with(EMAIL, CODE)
 
+    async def test_entry_session_closed_on_unload(self, hass):
+        session = MagicMock(close=AsyncMock())
+        with _mock_client(), patch(
+            "custom_components.georide_ha.async_create_clientsession", return_value=session
+        ):
+            result = await _start_user(hass)
+            result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_OTP: CODE})
+            await hass.async_block_till_done()
+            entry = hass.config_entries.async_entries(DOMAIN)[0]
+            assert entry.state is ConfigEntryState.LOADED
+            await hass.config_entries.async_unload(entry.entry_id)
+            await hass.async_block_till_done()
+        session.close.assert_awaited_once()
+
+    async def test_deleting_the_integration_signs_out(self, hass):
+        with _mock_client() as clients:
+            result = await _start_user(hass)
+            await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_OTP: CODE})
+            await hass.async_block_till_done()
+            entry = hass.config_entries.async_entries(DOMAIN)[0]
+            await hass.config_entries.async_remove(entry.entry_id)
+            await hass.async_block_till_done()
+        clients[-1].sign_out.assert_awaited_once()
+
+    async def test_sign_out_failure_does_not_block_the_removal(self, hass):
+        with _mock_client() as clients:
+            result = await _start_user(hass)
+            await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_OTP: CODE})
+            await hass.async_block_till_done()
+            entry = hass.config_entries.async_entries(DOMAIN)[0]
+            with patch("custom_components.georide_ha.GeoRideApiClient") as cls:
+                cls.return_value.sign_out = AsyncMock(side_effect=GeoRideConnectionError("down"))
+                await hass.config_entries.async_remove(entry.entry_id)
+        assert hass.config_entries.async_entries(DOMAIN) == []
+
     async def test_invalid_code_shows_error_and_stays(self, hass):
         with _mock_client(verify_raises=GeoRideAuthError("bad code")):
             result = await _start_user(hass)
@@ -119,6 +154,49 @@ class TestUserFlow:
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "otp"
         assert result["errors"] == {"base": "invalid_code"}
+
+    async def test_resend_mails_a_new_code_and_stays(self, hass):
+        with _mock_client() as clients:
+            result = await _start_user(hass)
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"resend": True}
+            )
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "otp" and result["errors"] == {}
+        assert clients[0].send_otp.await_count == 2
+        clients[0].verify_otp.assert_not_awaited()
+
+    async def test_empty_code_is_invalid_without_calling_geride(self, hass):
+        with _mock_client() as clients:
+            result = await _start_user(hass)
+            result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        assert result["errors"] == {"base": "invalid_code"}
+        clients[0].verify_otp.assert_not_awaited()
+
+    async def test_flow_session_closed_when_flow_ends(self, hass):
+        with _mock_client(), patch(
+            "custom_components.georide_ha.config_flow.async_create_clientsession",
+            return_value=(session := MagicMock(close=AsyncMock())),
+        ):
+            result = await _start_user(hass)
+            hass.config_entries.flow.async_abort(result["flow_id"])
+            await hass.async_block_till_done()
+        session.close.assert_awaited_once()
+
+    async def test_resend_failure_shows_error(self, hass):
+        with _mock_client() as clients:
+            result = await _start_user(hass)
+            clients[0].send_otp.side_effect = GeoRideConnectionError("dns")
+            result = await hass.config_entries.flow.async_configure(result["flow_id"], {"resend": True})
+        assert result["step_id"] == "otp" and result["errors"] == {"base": "cannot_connect"}
+
+    async def test_unexpected_api_error_after_code_is_logged(self, hass, caplog):
+        """Issue #3: the traceback in the log is what made the diagnosis possible."""
+        with _mock_client(trackers_raises=GeoRideError("HTTP 418 on GET /v1/vehicles")):
+            result = await _start_user(hass)
+            result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_OTP: CODE})
+        assert result["errors"] == {"base": "unknown"}
+        assert "HTTP 418 on GET /v1/vehicles" in caplog.text
 
     @pytest.mark.parametrize(
         ("exc", "error"),

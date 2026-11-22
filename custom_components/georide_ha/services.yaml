@@ -8,14 +8,14 @@ trip_summary:
   fields:
     start_date:
       name: Start date
-      description: First day (inclusive, UTC).
+      description: First day (inclusive, Home Assistant time zone).
       required: true
       example: "2026-01-01"
       selector:
         date:
     end_date:
       name: End date
-      description: Last day (inclusive, UTC).
+      description: Last day (inclusive, Home Assistant time zone).
       required: true
       example: "2026-05-14"
       selector:

@@ -13,6 +13,7 @@ from homeassistant.const import CONF_EMAIL, CONF_TOKEN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
+from .api import GeoRideError
 from .const import DOMAIN
 from .coordinator import GeoRideCoordinator
 
@@ -33,7 +34,12 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Snapshot of the config entry and the coordinator's last view of every tracker."""
     coordinator: GeoRideCoordinator = entry.runtime_data
+    try:
+        session_expires: str | None = await coordinator.client.get_session_expiry()
+    except GeoRideError as err:
+        session_expires = f"unknown ({err})"
     return {
+        "session_expires": session_expires,
         "entry": async_redact_data(entry.as_dict(), _ENTRY_TO_REDACT),
         "trackers": [
             async_redact_data(tracker, _TRACKER_TO_REDACT)
@@ -45,6 +51,9 @@ async def async_get_config_entry_diagnostics(
             else None
         ),
         "last_update_success": coordinator.last_update_success,
+        # What this account may not read: features the model lacks, vehicles shared without access.
+        "unsupported_paths": sorted(coordinator.client._unsupported),
+        "skipped_vehicles": sorted(coordinator.client._skipped),
     }
 
 

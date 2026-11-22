@@ -69,6 +69,12 @@ class TestImportStep:
         )
         assert result["type"] is FlowResultType.ABORT
 
+    async def test_aborts_when_the_old_entry_is_gone(self, hass):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_IMPORT}, data={"entry_id": "gone"}
+        )
+        assert result["type"] is FlowResultType.ABORT
+
 
 class TestAdoption:
     async def test_moves_devices_and_entities_then_removes_old_entry(self, hass):
