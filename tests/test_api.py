@@ -172,7 +172,7 @@ class TestErrors:
         ("status", "body", "exc"),
         [
             (401, {"code": "UNAUTHENTICATED"}, GeoRideAuthError),
-            (403, None, GeoRideAuthError),
+            (403, None, GeoRideNotSupportedError),  # signed in, not allowed: no reauth
             (500, None, GeoRideConnectionError),
             (422, {"code": "VALIDATION_FAILED"}, GeoRideError),
             (422, {"code": "TRACKER_FEATURE_NOT_SUPPORTED"}, GeoRideNotSupportedError),
@@ -232,6 +232,28 @@ class TestGetTrackers:
         client, _ = _client(_tracker_routes({("GET", f"/v1/trackers/{TID}/manual-lock"): missing}))
         [tracker] = await client.get_trackers()
         assert tracker["canLock"] is False and tracker["isLocked"] is None
+
+    async def test_subscription_refused_keeps_tracker(self):
+        # A shared vehicle's subscription belongs to its owner.
+        missing = _resp(404, {"code": "RESOURCE_NOT_FOUND", "status": 404})
+        client, _ = _client(_tracker_routes({("GET", "/v1/subscriptions/sub_01"): missing}))
+        [tracker] = await client.get_trackers()
+        assert tracker["trackerId"] == 2216122 and tracker["expires"] is None
+
+    async def test_unreadable_vehicle_skipped_others_kept(self, caplog):
+        shared = {"id": "vehicle_shared", "name": "3S partagé", "trackerId": "tracker_shared"}
+        routes = _tracker_routes({
+            ("GET", "/v1/vehicles"): _resp(200, [shared, {"id": VID, "name": "ZX-10R", "trackerId": TID}]),
+            ("GET", "/v1/vehicles/vehicle_shared"): _resp(200, {**VEHICLE, "id": "vehicle_shared"}),
+            ("GET", "/v1/trackers/tracker_shared"): _resp(403, {"code": "FORBIDDEN", "status": 403}),
+        })
+        client, session = _client(routes)
+        [tracker] = await client.get_trackers()
+        assert tracker["trackerId"] == 2216122
+        assert "3S partagé" in caplog.text
+        session.calls.clear()
+        await client.get_trackers()
+        assert not [c for c in session.calls if "shared" in c[1]]  # not asked again
 
     async def test_unsupported_feature_not_asked_twice(self):
         client, session = _client(_tracker_routes())

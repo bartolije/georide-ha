@@ -311,6 +311,10 @@ texte.
   chute** avec l'API v2.
 - **Alarmes avec environ 1 min de délai** : il n'y a plus de temps
   réel.
+- **Motos partagées** : si GeoRide refuse à ton compte les données d'une
+  moto partagée avec toi, elle est ignorée et le journal de Home
+  Assistant l'indique (« Skipping GeoRide vehicle … »). Les autres motos
+  du compte fonctionnent normalement.
 - **Intégration personnalisée** : elle n'est pas dans Home Assistant de
   base, les mises à jour passent par HACS.
 

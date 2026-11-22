@@ -50,7 +50,7 @@ class GeoRideConnectionError(GeoRideError):
 
 
 class GeoRideNotSupportedError(GeoRideError):
-    """The tracker model lacks this feature (HTTP 422 TRACKER_FEATURE_NOT_SUPPORTED)."""
+    """Not available to this account or tracker model (422 feature, 404 resource, 403)."""
 
 
 class GeoRideApiClient:
@@ -68,6 +68,8 @@ class GeoRideApiClient:
         self._ids: dict[int, tuple[str, str]] = {}
         # Paths that answered TRACKER_FEATURE_NOT_SUPPORTED: not asked again.
         self._unsupported: set[str] = set()
+        # Vehicles whose own data this account may not read (shared vehicles): not asked again.
+        self._skipped: set[str] = set()
 
     @property
     def token(self) -> str | None:
@@ -109,20 +111,26 @@ class GeoRideApiClient:
             raise GeoRideError(f"Unexpected /v1/vehicles shape: {type(vehicles).__name__}")
         trackers = []
         for summary in vehicles:
-            if not summary.get("trackerId"):
+            if not summary.get("trackerId") or summary["id"] in self._skipped:
                 continue
             vid, trid = summary["id"], summary["trackerId"]
-            vehicle, tracker, battery, mode, lock = await asyncio.gather(
-                self._request("GET", f"/v1/vehicles/{vid}"),
-                self._request("GET", f"/v1/trackers/{trid}"),
-                self._optional(f"/v1/trackers/{trid}/battery"),
-                self._optional(f"/v1/trackers/{trid}/settings/mode"),
-                self._optional(f"/v1/trackers/{trid}/manual-lock"),
-            )
+            try:
+                vehicle, tracker, battery, mode, lock = await asyncio.gather(
+                    self._request("GET", f"/v1/vehicles/{vid}"),
+                    self._request("GET", f"/v1/trackers/{trid}"),
+                    self._optional(f"/v1/trackers/{trid}/battery"),
+                    self._optional(f"/v1/trackers/{trid}/settings/mode"),
+                    self._optional(f"/v1/trackers/{trid}/manual-lock"),
+                )
+            except GeoRideNotSupportedError as err:
+                # One vehicle this account can't read must not block the others; retried on reload.
+                self._skipped.add(vid)
+                _LOGGER.warning("Skipping GeoRide vehicle %s (%s): %s", summary.get("name"), vid, err)
+                continue
             expires = None
             if tracker.get("subscriptionId"):
-                sub = await self._request("GET", f"/v1/subscriptions/{tracker['subscriptionId']}")
-                expires = (sub.get("dates") or {}).get("expiresAt")
+                sub = await self._optional(f"/v1/subscriptions/{tracker['subscriptionId']}")
+                expires = ((sub or {}).get("dates") or {}).get("expiresAt")
             payload = _tracker_payload(vehicle, tracker, battery, mode, lock, expires)
             if isinstance(payload.get("trackerId"), int):
                 self._ids[payload["trackerId"]] = (vid, trid)
@@ -280,10 +288,15 @@ class GeoRideApiClient:
                     code = None
         except ClientError as err:
             raise GeoRideConnectionError(str(err)) from err
-        if resp.status in (401, 403):
+        # Only 401 means no valid session (checked: bad or missing cookie → 401 UNAUTHENTICATED).
+        if resp.status == 401:
             raise GeoRideAuthError(f"Session rejected by GeoRide (HTTP {resp.status})")
-        # Some tracker models answer 404 instead of 422 on a feature they lack (/manual-lock, issue #3)
-        if (resp.status, code) in ((422, "TRACKER_FEATURE_NOT_SUPPORTED"), (404, "RESOURCE_NOT_FOUND")):
+        # 403 = signed in but not allowed; a vehicle shared by its owner answers 404 on
+        # owner-only resources (issue #3): both mean "not available to this account".
+        if resp.status == 403 or (resp.status, code) in (
+            (422, "TRACKER_FEATURE_NOT_SUPPORTED"),
+            (404, "RESOURCE_NOT_FOUND"),
+        ):
             raise GeoRideNotSupportedError(f"HTTP {resp.status} {code} on {method} {path}")
         if resp.status >= 500:
             raise GeoRideConnectionError(f"HTTP {resp.status} on {path}")
