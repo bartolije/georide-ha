@@ -14,7 +14,7 @@ jobs:
     name: mypy strict
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
@@ -28,7 +28,7 @@ jobs:
     name: pytest (unit + offline)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
@@ -44,6 +44,6 @@ jobs:
     name: Lovelace card syntax
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # A syntax error ships a card that never loads; parse it as the module it is.
       - run: cp lovelace/georide-card.js /tmp/card.mjs && node --check /tmp/card.mjs
