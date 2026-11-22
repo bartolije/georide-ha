@@ -54,6 +54,7 @@ SETTING_SWITCHES: tuple[GeoRideSettingSwitchDescription, ...] = (
         key="sleep_mode",
         translation_key="sleep_mode",
         entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=False,  # opt-in: only `off` was tried on a real tracker
         state_key="sleepMode",
         set_fn=lambda client, tid, on: client.set_sleep_mode(tid, on),
         attrs=("sleepModePending",),

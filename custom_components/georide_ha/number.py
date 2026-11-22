@@ -46,6 +46,8 @@ class GeoRideCutoffVoltage(GeoRideEntity, NumberEntity):
     _attr_translation_key = "cutoff_voltage"
     _attr_device_class = NumberDeviceClass.VOLTAGE
     _attr_entity_category = EntityCategory.CONFIG
+    # Opt-in: a real change of value was never tried on a real tracker (same value only).
+    _attr_entity_registry_enabled_default = False
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
     # Range of the GeoRide app; the API refuses values outside its own limits.
     _attr_native_min_value = 11.0

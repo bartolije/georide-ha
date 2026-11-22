@@ -690,6 +690,8 @@ class TestSettingsEntities:
         coord = _coordinator(trackers=[self.FULL])
         n = GeoRideCutoffVoltage(coord, TID)
         assert n.native_value == 12.25 and (n.native_min_value, n.native_max_value) == (11.0, 16.0)
+        assert n.entity_registry_enabled_default is False  # opt-in until tried on a real tracker
+        assert _desc_by_key(SETTING_SWITCHES, "sleep_mode").entity_registry_enabled_default is False
         await n.async_set_native_value(12.5)
         coord.client.set_cutoff_voltage.assert_awaited_once_with(TID, 12.5)
         coord.async_request_refresh.assert_awaited_once()

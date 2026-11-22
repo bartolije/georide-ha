@@ -148,9 +148,9 @@ suivantes.
 | `binary_sensor` | Appel d'urgence / Appel aux proches | Diagnostic, désactivés par défaut. Services d'appel après une chute. |
 | `binary_sensor` | Badge associé | Diagnostic, désactivé par défaut. |
 | `update` | Firmware / Firmware Bluetooth | Version installée et dernière version. La mise à jour se lance depuis l'appli GeoRide. |
-| `number` | Tension de coupure batterie | Réglage. Tension de la batterie moto sous laquelle le traceur cesse de s'alimenter dessus (11 à 16 V). Envoyé au traceur à sa prochaine connexion. |
+| `number` | Tension de coupure batterie | Réglage, **désactivé par défaut** (à activer dans la fiche de l'appareil). Tension de la batterie moto sous laquelle le traceur cesse de s'alimenter dessus (11 à 16 V). Envoyé au traceur à sa prochaine connexion. |
 | `switch` | Détecteur de chute | Réglage. |
-| `switch` | Mode veille | Réglage. Appliqué à la prochaine connexion du traceur ; l'attribut `pending` indique une demande en attente. |
+| `switch` | Mode veille | Réglage, **désactivé par défaut**. Appliqué à la prochaine connexion du traceur ; l'attribut `pending` indique une demande en attente. |
 | `sensor` | Sensibilité aux vibrations | Diagnostic. Niveau réglé dans l'appli. |
 
 Une entité n'est créée que si le traceur a la fonction : un GeoRide 1 ou
@@ -339,8 +339,10 @@ texte.
   au plomb ne l'est pas.
 - **Pas de vitesse instantanée, d'altitude, ni d'indicateur de chute**
   avec l'API v2.
-- **Mode veille** : seule la désactivation a été vérifiée sur un vrai
-  traceur.
+- **Mode veille et tension de coupure** : désactivés par défaut, car
+  pas encore vérifiés jusqu'au bout sur un vrai traceur (seuls la
+  désactivation de la veille et le renvoi de la tension déjà réglée
+  l'ont été). Si tu les actives, ton retour m'intéresse.
 - **Alarmes avec environ 1 min de délai** : il n'y a plus de temps
   réel.
 - **Motos partagées** : si GeoRide refuse à ton compte les données d'une
