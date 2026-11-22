@@ -137,6 +137,17 @@ class TestLegacyNames:
         await hass.async_block_till_done()
         assert sorted(fired) == ["georide_ha_lock_event", "georide_lock_event"]
 
+    async def test_old_service_is_described_without_an_error(self, hass, caplog):
+        """HA must not look for a services.yaml in the gone `georide` integration."""
+        from homeassistant.helpers.service import async_get_all_descriptions
+
+        from custom_components.georide_ha.services import async_setup_services
+
+        await async_setup_services(hass, LEGACY_DOMAIN)
+        descriptions = await async_get_all_descriptions(hass)
+        assert "start_date" in descriptions[LEGACY_DOMAIN]["trip_summary"]["fields"]
+        assert "Failed to load services.yaml" not in caplog.text
+
     async def test_old_service_name_is_registered(self, hass):
         await services.async_setup_services(hass, LEGACY_DOMAIN)
         assert hass.services.has_service(LEGACY_DOMAIN, services.SERVICE_TRIP_SUMMARY)
