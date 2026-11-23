@@ -18,6 +18,9 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.service import async_set_service_schema
+from homeassistant.loader import async_get_integration
+from homeassistant.util.yaml import load_yaml_dict
 from homeassistant.util import dt as dt_util
 
 from .api import (
@@ -160,3 +163,11 @@ async def async_setup_services(hass: HomeAssistant, domain: str = DOMAIN) -> Non
         schema=TRIP_SUMMARY_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
+    if domain != DOMAIN:
+        # No `georide` integration is left to describe its service: without this,
+        # HA logs "Failed to load services.yaml for integration: georide" at each start.
+        integration = await async_get_integration(hass, DOMAIN)
+        described = await hass.async_add_executor_job(
+            load_yaml_dict, str(integration.file_path / "services.yaml")
+        )
+        async_set_service_schema(hass, domain, SERVICE_TRIP_SUMMARY, described[SERVICE_TRIP_SUMMARY])
