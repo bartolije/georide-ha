@@ -5,6 +5,7 @@ token and the account email are redacted before returning the snapshot to the us
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -26,7 +27,15 @@ _TRACKER_TO_REDACT = {
     "lockedLatitude",
     "lockedLongitude",
     "altitude",
+    # Account-specific GeoRide identifiers.
+    "vehicleId",
+    "georideTrackerId",
 }
+
+
+def _mask_ids(path: str) -> str:
+    """Hide the account-specific identifiers of an API path, keep its shape."""
+    return re.sub(r"(?<=/)([a-z]+)_[a-z0-9]{6,}", r"\1_…", path)
 
 
 async def async_get_config_entry_diagnostics(
@@ -52,8 +61,8 @@ async def async_get_config_entry_diagnostics(
         ),
         "last_update_success": coordinator.last_update_success,
         # What this account may not read: features the model lacks, vehicles shared without access.
-        "unsupported_paths": sorted(coordinator.client._unsupported),
-        "skipped_vehicles": sorted(coordinator.client._skipped),
+        "unsupported_paths": sorted(_mask_ids(p) for p in coordinator.client._unsupported),
+        "skipped_vehicles": len(coordinator.client._skipped),
     }
 
 
