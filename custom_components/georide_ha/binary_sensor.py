@@ -37,10 +37,6 @@ class GeoRideBinarySensorEntityDescription(BinarySensorEntityDescription):
 
 
 BINARY_SENSORS: tuple[GeoRideBinarySensorEntityDescription, ...] = (
-    # NOTE: the previous `lock` binary_sensor was replaced by the dedicated
-    # `lock` platform in v0.4.0. If you upgrade from <=0.3.0 and have
-    # automations bound to `binary_sensor.<bike>_lock`, migrate them to
-    # `lock.<bike>` (state is now "locked" / "unlocked" instead of on/off).
     GeoRideBinarySensorEntityDescription(
         key="moving",
         translation_key="moving",

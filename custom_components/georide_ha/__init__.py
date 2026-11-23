@@ -164,7 +164,7 @@ async def _async_adopt_legacy_entry(hass: HomeAssistant, entry: ConfigEntry) -> 
         await hass.config_entries.async_remove(old.entry_id)
         _LOGGER.info("GeoRide: took over %s from the 0.17 domain", old.title)
     if not hass.config_entries.async_entries(LEGACY_DOMAIN):
-        # shortcut: deletes our own 0.17 folder left behind by HACS; drop once nobody runs 0.17.
+        # Our own 0.17 folder, left behind by HACS when it installs the renamed integration.
         await hass.async_add_executor_job(shutil.rmtree, legacy.file_path, True)
 
 

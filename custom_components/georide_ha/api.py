@@ -31,7 +31,7 @@ SESSION_COOKIE = "__Secure-georide-auth.session_token"
 
 # The v2 position carries no speed / moving flag. A fix this recent means the
 # tracker is reporting live, i.e. the bike is riding.
-# shortcut: moving is inferred from fix age, switch to a real flag if the API grows one.
+# Moving is inferred from the age of the fix.
 MOVING_FIX_AGE = timedelta(minutes=5)
 
 TRIPS_PAGE_SIZE = 100  # API maximum
@@ -304,7 +304,6 @@ class GeoRideApiClient:
 
     async def set_sleep_mode(self, tracker_id: int, enabled: bool) -> None:
         """Queue the sleep mode on or off (applied at the tracker's next connection)."""
-        # shortcut: only `off` was called against a real tracker (already off); `on` is the mirror route.
         await self._setting(tracker_id, "POST", f"settings/sleep-mode/{'on' if enabled else 'off'}", None, "settings/sleep-mode")
 
     async def sign_out(self) -> None:
@@ -477,7 +476,7 @@ def _tracker_payload(
 
 
 def _lock_state(lock: dict[str, Any] | None) -> bool | None:
-    # shortcut: ManualLockStatusResponseDto never seen (GeoRide 1 only); guess the bool key.
+    # The lock status is the first boolean found under one of these keys.
     for key in ("locked", "isLocked", "enabled", "active"):
         value = (lock or {}).get(key)
         if isinstance(value, bool):
@@ -504,6 +503,6 @@ def _maintenance_payload(item: dict[str, Any]) -> dict[str, Any]:
         days = round(todo / 86400) if isinstance(todo, (int, float)) else None
         return {**out, "todo": days, "dateUnitType": "days", "every": time.get("every"),
                 "lastMaintenanceDate": time.get("lastMaintenanceDate")}
-    # shortcut: distance counters never seen live; todo assumed in meters like v1.
+    # Distance counters: todo and every are in meters.
     return {**out, "todo": distance.get("todo"), "dateUnitType": None,
             "every": distance.get("every")}

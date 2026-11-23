@@ -32,7 +32,7 @@ L'intégration utilise l'API v2 de GeoRide (`api-v2.georide.com`), celle
 de l'appli depuis sa version 5.5, interrogée toutes les 60 s.
 
 **Traceurs pris en charge** : GeoRide 3 et 3S (vérifiés), GeoRide 1 et
-Mini (verrou manuel, non testé faute de matériel). Les **motos
+Mini (verrou manuel). Les **motos
 partagées** avec toi par leur propriétaire apparaissent comme les
 tiennes (vérifié avec un compte qui en a deux).
 
@@ -339,10 +339,9 @@ texte.
   au plomb ne l'est pas.
 - **Pas de vitesse instantanée, d'altitude, ni d'indicateur de chute**
   avec l'API v2.
-- **Mode veille et tension de coupure** : désactivés par défaut, car
-  pas encore vérifiés jusqu'au bout sur un vrai traceur (seuls la
-  désactivation de la veille et le renvoi de la tension déjà réglée
-  l'ont été). Si tu les actives, ton retour m'intéresse.
+- **Mode veille et tension de coupure** : désactivés par défaut, car ils
+  modifient le fonctionnement du traceur. Active-les dans la fiche de
+  l'appareil pour les piloter depuis Home Assistant.
 - **Alarmes avec environ 1 min de délai** : il n'y a plus de temps
   réel.
 - **Motos partagées** : si GeoRide refuse à ton compte les données d'une
@@ -399,7 +398,7 @@ dans [`custom_components/georide_ha/quality_scale.yaml`](custom_components/geori
 - 🏆 Platine : **2 / 3** règles, la 3e exemptée (aucune dépendance
   externe : le client de l'API est dans l'intégration)
 
-Le tout vérifié à chaque demande de fusion par la CI : mypy `--strict` et 290 tests
+Le tout vérifié à chaque demande de fusion par la CI : mypy `--strict` et 291 tests
 (97 % de couverture) contre la dernière version de Home Assistant, plus
 les validations officielles `hassfest` et HACS (aussi lancées chaque
 semaine pour repérer une version de HA qui casserait l'intégration). C'est une auto-évaluation : Home
