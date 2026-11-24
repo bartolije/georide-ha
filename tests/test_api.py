@@ -106,7 +106,6 @@ def _tracker_routes(overrides: dict[tuple[str, str], Any] | None = None) -> dict
         ("GET", f"/v1/trackers/{TID}"): _resp(200, TRACKER),
         ("GET", f"/v1/trackers/{TID}/battery"): _resp(200, {"external": 13.4, "internal": 100, "updatedAt": "2026-11-06T15:57:57Z", "isPlugged": True}),
         ("GET", f"/v1/trackers/{TID}/settings/mode"): _resp(200, {"mode": "eco"}),
-        ("GET", f"/v1/trackers/{TID}/manual-lock"): NOT_SUPPORTED,
         ("GET", "/v1/subscriptions/sub_01"): _resp(200, {"dates": {"expiresAt": "2027-06-07T18:50:58.523Z"}}),
     }
     routes.update(overrides or {})
@@ -203,7 +202,7 @@ class TestErrors:
         client, _ = _client(_tracker_routes(), token="secret.sig")
         await client.get_trackers()
         assert "GET /v1/vehicles -> 200" in caplog.text
-        assert f"GET /v1/trackers/{TID}/manual-lock -> 422 TRACKER_FEATURE_NOT_SUPPORTED" in caplog.text
+        assert f"GET /v1/trackers/{TID}/battery -> 200" in caplog.text
         assert "secret" not in caplog.text
 
     async def test_unknown_tracker_before_refresh(self):
@@ -226,7 +225,6 @@ class TestGetTrackers:
         assert tracker["externalBatteryVoltage"] == 13.4
         assert tracker["internalBatteryLevel"] == 100 and tracker["isPlugged"] is True
         assert tracker["isInEco"] is True and tracker["isInElectricMode"] is False
-        assert tracker["canLock"] is False and tracker["isLocked"] is None
         assert tracker["expires"] == "2027-06-07T18:50:58.523Z"
         assert "accessory/live-alarm" in tracker["capabilities"]
 
@@ -237,17 +235,12 @@ class TestGetTrackers:
         [tracker] = await client.get_trackers()
         assert tracker["moving"] is True
 
-    async def test_manual_lock_tracker(self):
-        client, _ = _client(_tracker_routes({("GET", f"/v1/trackers/{TID}/manual-lock"): _resp(200, {"enabled": True})}))
-        [tracker] = await client.get_trackers()
-        assert tracker["canLock"] is True and tracker["isLocked"] is True
-
-    async def test_manual_lock_404_is_unsupported(self):
-        # issue #3: login failed on HTTP 404 RESOURCE_NOT_FOUND on /manual-lock
+    async def test_owner_only_route_404_is_unsupported(self):
+        # issue #3: login failed on HTTP 404 RESOURCE_NOT_FOUND for a vehicle shared by its owner
         missing = _resp(404, {"code": "RESOURCE_NOT_FOUND", "status": 404})
-        client, _ = _client(_tracker_routes({("GET", f"/v1/trackers/{TID}/manual-lock"): missing}))
+        client, _ = _client(_tracker_routes({("GET", f"/v1/trackers/{TID}/battery"): missing}))
         [tracker] = await client.get_trackers()
-        assert tracker["canLock"] is False and tracker["isLocked"] is None
+        assert tracker["externalBatteryVoltage"] is None
 
     async def test_subscription_refused_keeps_tracker(self):
         # A shared vehicle's subscription belongs to its owner.
@@ -272,11 +265,11 @@ class TestGetTrackers:
         assert not [c for c in session.calls if "shared" in c[1]]  # not asked again
 
     async def test_unsupported_feature_not_asked_twice(self):
-        client, session = _client(_tracker_routes())
+        client, session = _client(_tracker_routes({("GET", f"/v1/trackers/{TID}/battery"): NOT_SUPPORTED}))
         await client.get_trackers()
         await client.get_trackers()
-        lock_calls = [c for c in session.calls if c[1].endswith("/manual-lock")]
-        assert len(lock_calls) == 1
+        calls = [c for c in session.calls if c[1].endswith("/battery")]
+        assert len(calls) == 1
 
     async def test_vehicle_without_tracker_skipped(self):
         client, _ = _client({("GET", "/v1/vehicles"): _resp(200, [{"id": VID, "trackerId": None}])})
@@ -378,8 +371,6 @@ class TestCommands:
     @pytest.mark.parametrize(
         ("method", "action"),
         [
-            ("lock_tracker", "manual-lock/enable"),
-            ("unlock_tracker", "manual-lock/disable"),
             ("eco_mode_on", "settings/mode/eco"),
             ("eco_mode_off", "settings/mode/running"),
         ],
@@ -389,6 +380,7 @@ class TestCommands:
         client, session = await _ready_client({("POST", path): _resp(201, {"type": "ecoModeIn", "eta": None})})
         await getattr(client, method)(2216122)
         assert session.calls[0][:2] == ("POST", path)
+        assert session.calls[0][2]["json"] == {}  # without a JSON body GeoRide answers 415
 
     async def test_mode_command_returns_eta_and_rereads_mode(self):
         path = f"/v1/trackers/{TID}/settings/mode/eco"
@@ -463,20 +455,14 @@ class TestSettings:
         await client.get_trackers()
         assert ("GET", path) in [c[:2] for c in session.calls]
 
-    async def test_fall_detector_and_sleep_mode_routes(self):
+    async def test_fall_detector_route(self):
         client, session = await _ready_client({
             **SETTINGS,
             ("PATCH", f"{BASE}/settings/fall-detector"): _resp(200, {"enabled": False}),
-            ("POST", f"{BASE}/settings/sleep-mode/on"): _resp(201, {}),
-            ("POST", f"{BASE}/settings/sleep-mode/off"): _resp(201, {}),
         })
         await client.set_fall_detector(2216122, False)
-        await client.set_sleep_mode(2216122, True)
-        await client.set_sleep_mode(2216122, False)
         assert [(c[0], c[1].removeprefix(BASE), c[2]["json"]) for c in session.calls] == [
             ("PATCH", "/settings/fall-detector", {"enabled": False}),
-            ("POST", "/settings/sleep-mode/on", None),
-            ("POST", "/settings/sleep-mode/off", None),
         ]
 
     async def test_sign_out_and_session_expiry(self):

@@ -43,6 +43,7 @@
       "plugged": { "name": "Power connected" },
       "online": { "name": "Tracker online" },
       "maintenance_mode": { "name": "Maintenance mode" },
+      "sleep_mode": { "name": "Sleep mode" },
       "emergency_call": { "name": "Emergency call" },
       "friend_call": { "name": "Call to relatives" },
       "stolen": { "name": "Stolen" },
@@ -72,8 +73,7 @@
     },
     "switch": {
       "eco_mode": { "name": "Eco mode" },
-      "fall_detector": { "name": "Fall detector" },
-      "sleep_mode": { "name": "Sleep mode" }
+      "fall_detector": { "name": "Fall detector" }
     },
     "number": {
       "cutoff_voltage": { "name": "Battery cutoff voltage" }

@@ -43,7 +43,6 @@ if not _HA_NATIVE:
         class _Platform:
             BINARY_SENSOR = "binary_sensor"
             DEVICE_TRACKER = "device_tracker"
-            LOCK = "lock"
             NUMBER = "number"
             UPDATE = "update"
             SENSOR = "sensor"

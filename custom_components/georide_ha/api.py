@@ -122,12 +122,11 @@ class GeoRideApiClient:
                 continue
             vid, trid = summary["id"], summary["trackerId"]
             try:
-                vehicle, tracker, battery, mode, lock = await asyncio.gather(
+                vehicle, tracker, battery, mode = await asyncio.gather(
                     self._request("GET", f"/v1/vehicles/{vid}"),
                     self._request("GET", f"/v1/trackers/{trid}"),
                     self._optional(f"/v1/trackers/{trid}/battery"),
                     self._optional_slow(f"/v1/trackers/{trid}/settings/mode"),
-                    self._optional(f"/v1/trackers/{trid}/manual-lock"),
                 )
             except GeoRideNotSupportedError as err:
                 # One vehicle this account can't read must not block the others; retried on reload.
@@ -138,7 +137,7 @@ class GeoRideApiClient:
             if tracker.get("subscriptionId"):
                 sub = await self._optional_slow(f"/v1/subscriptions/{tracker['subscriptionId']}")
                 expires = ((sub or {}).get("dates") or {}).get("expiresAt")
-            payload = _tracker_payload(vehicle, tracker, battery, mode, lock, expires)
+            payload = _tracker_payload(vehicle, tracker, battery, mode, expires)
             payload.update(await self._settings(trid))
             if isinstance(payload.get("trackerId"), int):
                 self._ids[payload["trackerId"]] = (vid, trid)
@@ -170,7 +169,6 @@ class GeoRideApiClient:
             "bleFirmwareVersion": nrf.get("currentVersion"),
             "bleFirmwareLatest": nrf.get("latestVersion"),
             "sleepMode": (sleep or {}).get("enabled"),
-            "sleepModePending": (sleep or {}).get("pending"),
             "maintenanceMode": (maintenance or {}).get("enabled"),
             "cutoffVoltage": millivolts / 1000 if isinstance(millivolts, (int, float)) else None,
             "vibrationSensitivity": (vibration or {}).get("vibrationSensitivity"),
@@ -272,14 +270,6 @@ class GeoRideApiClient:
 
     # -- commands -----------------------------------------------------------
 
-    async def lock_tracker(self, tracker_id: int) -> None:
-        """Enable the manual lock (GeoRide 1; GeoRide 3 locks itself)."""
-        await self._command(tracker_id, "manual-lock/enable")
-
-    async def unlock_tracker(self, tracker_id: int) -> None:
-        """Disable the manual lock."""
-        await self._command(tracker_id, "manual-lock/disable")
-
     async def eco_mode_on(self, tracker_id: int) -> str | None:
         """Queue the switch to eco mode; return when GeoRide expects it applied (ISO 8601).
 
@@ -302,21 +292,15 @@ class GeoRideApiClient:
         """Enable or disable the fall detector."""
         await self._setting(tracker_id, "PATCH", "settings/fall-detector", {"enabled": enabled})
 
-    async def set_sleep_mode(self, tracker_id: int, enabled: bool) -> None:
-        """Queue the sleep mode on or off (applied at the tracker's next connection)."""
-        await self._setting(tracker_id, "POST", f"settings/sleep-mode/{'on' if enabled else 'off'}", None, "settings/sleep-mode")
-
     async def sign_out(self) -> None:
         """End the session on GeoRide's side (the cookie stops working)."""
         await self._request("POST", "/auth/sign-out", json={})
         self._token = None
 
-    async def _setting(
-        self, tracker_id: int, method: str, action: str, body: dict[str, Any] | None, read: str | None = None
-    ) -> None:
+    async def _setting(self, tracker_id: int, method: str, action: str, body: dict[str, Any]) -> None:
         trid = self._tracker_id(tracker_id)
         await self._request(method, f"/v1/trackers/{trid}/{action}", json=body)
-        self._slow.pop(f"/v1/trackers/{trid}/{read or action}", None)  # read it fresh again
+        self._slow.pop(f"/v1/trackers/{trid}/{action}", None)  # read it fresh again
 
     async def _mode_command(self, tracker_id: int, mode: str) -> str | None:
         trid = self._tracker_id(tracker_id)
@@ -340,7 +324,8 @@ class GeoRideApiClient:
             raise GeoRideError(f"Unknown tracker {tracker_id}; refresh trackers first") from err
 
     async def _command(self, tracker_id: int, action: str) -> Any:
-        return await self._request("POST", f"/v1/trackers/{self._tracker_id(tracker_id)}/{action}")
+        # GeoRide answers 415 to a POST without a JSON body, even an empty one.
+        return await self._request("POST", f"/v1/trackers/{self._tracker_id(tracker_id)}/{action}", json={})
 
     async def _optional(self, path: str) -> Any:
         """GET that returns None when the tracker model lacks the feature."""
@@ -439,7 +424,6 @@ def _tracker_payload(
     tracker: dict[str, Any],
     battery: dict[str, Any] | None,
     mode: dict[str, Any] | None,
-    lock: dict[str, Any] | None,
     expires: str | None,
 ) -> dict[str, Any]:
     """Assemble the v1-shaped tracker dict the entities read."""
@@ -447,7 +431,6 @@ def _tracker_payload(
     coordinate = position.get("coordinate") or {}
     fixtime = position.get("timestamp")
     current_mode = (mode or {}).get("mode")
-    locked = _lock_state(lock)
     return {
         "trackerId": tracker.get("realtimeId"),
         "trackerName": vehicle.get("name"),
@@ -465,23 +448,11 @@ def _tracker_payload(
         "batteryUpdatedAt": (battery or {}).get("updatedAt"),
         "isInEco": current_mode == "eco" if current_mode else None,
         "isInElectricMode": current_mode == "electric" if current_mode else None,
-        "canLock": lock is not None,
-        "canUnlock": lock is not None,
-        "isLocked": locked,
         "expires": expires,
         "role": vehicle.get("role"),
         "vehicleId": vehicle.get("id"),
         "georideTrackerId": tracker.get("id"),
     }
-
-
-def _lock_state(lock: dict[str, Any] | None) -> bool | None:
-    # The lock status is the first boolean found under one of these keys.
-    for key in ("locked", "isLocked", "enabled", "active"):
-        value = (lock or {}).get(key)
-        if isinstance(value, bool):
-            return value
-    return None
 
 
 def _is_recent(timestamp: Any) -> bool | None:

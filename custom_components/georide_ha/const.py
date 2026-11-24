@@ -16,7 +16,6 @@ DOCUMENTATION_URL = "https://github.com/bartolije/georide-ha"
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.DEVICE_TRACKER,
-    Platform.LOCK,
     Platform.NUMBER,
     Platform.SENSOR,
     Platform.SWITCH,
@@ -27,6 +26,5 @@ API_HOST = "https://api-v2.georide.com"
 API_TIMEOUT = 30
 
 # Home Assistant events fired by the coordinator on tracker state transitions.
-EVENT_LOCK = f"{DOMAIN}_lock_event"
 EVENT_MOVING = f"{DOMAIN}_moving_event"
 EVENT_ALARM = f"{DOMAIN}_alarm_event"

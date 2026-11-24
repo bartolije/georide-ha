@@ -21,7 +21,6 @@ from custom_components.georide_ha.api import (  # noqa: E402
 from custom_components.georide_ha.const import (  # noqa: E402
     DOMAIN,
     EVENT_ALARM,
-    EVENT_LOCK,
     EVENT_MOVING,
 )
 from custom_components.georide_ha.coordinator import GeoRideCoordinator  # noqa: E402
@@ -303,20 +302,6 @@ class TestStateChangeEvents:
         await coord._async_update_data()
         await coord._async_update_data()  # data is set after first; subsequent diff uses it
         return entry, client, coord
-
-    async def test_lock_transition_fires_event(self, hass):
-        events = []
-        hass.bus.async_listen(EVENT_LOCK, lambda e: events.append(e))
-        entry = _make_entry(hass)
-        client = _client(trackers=[{"trackerId": 1, "isLocked": True}])
-        coord = GeoRideCoordinator(hass, entry, client)
-        await coord.async_refresh()  # primes self.data
-
-        # Now flip the lock.
-        client.get_trackers = AsyncMock(return_value=[{"trackerId": 1, "isLocked": False}])
-        await coord.async_refresh()
-        await hass.async_block_till_done()
-        assert any(ev.data.get("is_locked") is False for ev in events)
 
     async def test_moving_transition_fires_event(self, hass):
         events = []

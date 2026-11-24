@@ -15,8 +15,6 @@ d'inclinaison. L'intégration branche ton compte GeoRide à Home Assistant
 pour que chaque moto y apparaisse comme un appareil avec :
 
 - 📍 sa **position** sur la carte
-- 🔒 un **verrou** à distance (GeoRide 1 ; le GeoRide 3 se verrouille
-  seul avec le badge ou le téléphone)
 - 🚨 des **événements HA** quand l'alarme se déclenche (vibration,
   mouvement…), avec environ 1 min de délai
 - 🔋 la **batterie de la moto** et celle **du traceur** en %, une alerte
@@ -31,8 +29,9 @@ pour que chaque moto y apparaisse comme un appareil avec :
 L'intégration utilise l'API v2 de GeoRide (`api-v2.georide.com`), celle
 de l'appli depuis sa version 5.5, interrogée toutes les 60 s.
 
-**Traceurs pris en charge** : GeoRide 3 et 3S (vérifiés), GeoRide 1 et
-Mini (verrou manuel). Les **motos
+**Traceurs pris en charge** : GeoRide 3 et 3S (vérifiés). Les GeoRide 1
+et Mini se connectent, sans leur verrou manuel (voir *Limites
+connues*). Les **motos
 partagées** avec toi par leur propriétaire apparaissent comme les
 tiennes (vérifié avec un compte qui en a deux).
 
@@ -67,8 +66,9 @@ pour cohabiter avec l'autre intégration GeoRide.
 redémarrage, la 0.18 reprend ton compte, tes appareils et tes entités
 (mêmes identifiants, historique conservé), garde les anciens noms
 d'événements (`georide_…_event`) et de service (`georide.trip_summary`)
-pour tes automatisations, puis supprime l'ancien dossier
-`custom_components/georide`. Si tu passes directement d'une version plus
+pour tes automatisations. L'ancien dossier `custom_components/georide`
+reste en place, inactif : supprime-le à la main (HACS ne le fait pas).
+Si tu passes directement d'une version plus
 ancienne à la 0.18, ajoute simplement l'intégration GeoRide (nouveau code
 par e-mail) : elle reprend l'ancienne installation de la même façon.
 
@@ -129,7 +129,6 @@ suivantes.
 | Plateforme | Entité | Contenu |
 |---|---|---|
 | `device_tracker` | (nom de la moto) | Position GPS, affichée sur la carte. |
-| `lock` | (nom de la moto) | Verrou manuel, traceurs GeoRide 1 seulement. Le GeoRide 3 se verrouille seul (badge, téléphone) : pas d'entité. |
 | `switch` | Mode éco | Mode « moto sans batterie » de l'appli, pour les traceurs qui l'ont (pas les GeoRide 1 et Mini). Appliqué à la prochaine connexion du traceur, ce qui peut prendre des heures quand il est en veille : en attendant, l'interrupteur affiche le mode demandé et l'attribut `pending_until` l'heure prévue par GeoRide. |
 | `sensor` | Compteur kilométrique | Kilomètres parcourus. |
 | `sensor` | Batterie | Batterie de la moto en %, calculée depuis la tension. |
@@ -148,9 +147,9 @@ suivantes.
 | `binary_sensor` | Appel d'urgence / Appel aux proches | Diagnostic, désactivés par défaut. Services d'appel après une chute. |
 | `binary_sensor` | Badge associé | Diagnostic, désactivé par défaut. |
 | `update` | Firmware / Firmware Bluetooth | Version installée et dernière version. La mise à jour se lance depuis l'appli GeoRide. |
-| `number` | Tension de coupure batterie | Réglage, **désactivé par défaut** (à activer dans la fiche de l'appareil). Tension de la batterie moto sous laquelle le traceur cesse de s'alimenter dessus (11 à 16 V). Envoyé au traceur à sa prochaine connexion. |
+| `number` | Tension de coupure batterie | Réglage. Tension de la batterie moto sous laquelle le traceur cesse de s'alimenter dessus (11 à 16 V). Envoyé au traceur à sa prochaine connexion. |
 | `switch` | Détecteur de chute | Réglage. |
-| `switch` | Mode veille | Réglage, **désactivé par défaut**. Appliqué à la prochaine connexion du traceur ; l'attribut `pending` indique une demande en attente. |
+| `binary_sensor` | Mode veille | Diagnostic. Mode veille du traceur actif (lecture seule). |
 | `sensor` | Sensibilité aux vibrations | Diagnostic. Niveau réglé dans l'appli. |
 
 Une entité n'est créée que si le traceur a la fonction : un GeoRide 1 ou
@@ -241,6 +240,18 @@ aggregate:
 ajoute la liste brute des trajets (pour une carte Lovelace, par
 exemple).
 
+## Commandes envoyées au traceur
+
+L'intégration n'envoie au traceur que des commandes confirmées sur un
+vrai traceur (GeoRide 3S, micrologiciel 50). GeoRide n'applique une
+commande qu'à la prochaine connexion du traceur :
+
+| Commande | Confirmée comment |
+|---|---|
+| Tension de coupure | Le 24/11/2026 : passée de 12,25 V à 12,30 V puis remise à 12,25 V ; chaque valeur a été relue chez GeoRide après l'envoi. |
+| Détecteur de chute | Le 24/11/2026 : désactivé puis réactivé ; chaque état a été relu chez GeoRide après l'envoi. |
+| Mode éco | Le 24/11/2026 : activé depuis l'intégration ; le traceur l'a appliqué à sa connexion suivante et le mode a été relu « eco » chez GeoRide. Le retour au mode normal part par la même commande. |
+
 ## Événements
 
 L'intégration déclenche des événements Home Assistant, utiles pour les
@@ -248,7 +259,6 @@ automatisations.
 
 | Événement | Données (`event_data`) | Déclenché quand |
 |---|---|---|
-| `georide_ha_lock_event` | `device_id`, `tracker_id`, `tracker_name`, `is_locked` | le verrou change d'état. |
 | `georide_ha_moving_event` | `device_id`, `tracker_id`, `tracker_name`, `moving` | la moto se met en mouvement ou s'arrête. |
 | `georide_ha_alarm_event` | `device_id`, `tracker_id`, `tracker_name`, `type`, `occurred_at`, `source` | à chaque nouvel événement du traceur. `type` est le type GeoRide sans le préfixe `event/` : `vibration/detected`, `movement/detected`, `displacement/detected`, `power/restored`… (types changés avec l'API v2). |
 
@@ -307,7 +317,7 @@ automation:
 ## Carte Lovelace
 
 Une carte personnalisée tient dans `lovelace/georide-card.js`. Elle
-regroupe la carte, le verrou, la batterie de la moto et celle du
+regroupe la carte, la batterie de la moto et celle du
 traceur, le compteur, la dernière position et le dernier trajet dans un
 seul bloc par moto, avec une photo de la moto en bandeau si tu veux. Une
 pastille **DÉBRANCHÉ** s'affiche si le traceur perd l'alimentation de la
@@ -339,9 +349,10 @@ texte.
   au plomb ne l'est pas.
 - **Pas de vitesse instantanée, d'altitude, ni d'indicateur de chute**
   avec l'API v2.
-- **Mode veille et tension de coupure** : désactivés par défaut, car ils
-  modifient le fonctionnement du traceur. Active-les dans la fiche de
-  l'appareil pour les piloter depuis Home Assistant.
+- **Pas de verrou manuel (GeoRide 1 et Mini)** ni d'activation du
+  **mode veille** : ces commandes ne sont pas proposées tant qu'elles
+  n'ont pas été confirmées sur un vrai traceur. Le mode veille est
+  affiché en lecture seule.
 - **Alarmes avec environ 1 min de délai** : il n'y a plus de temps
   réel.
 - **Motos partagées** : si GeoRide refuse à ton compte les données d'une
@@ -398,7 +409,7 @@ dans [`custom_components/georide_ha/quality_scale.yaml`](custom_components/geori
 - 🏆 Platine : **2 / 3** règles, la 3e exemptée (aucune dépendance
   externe : le client de l'API est dans l'intégration)
 
-Le tout vérifié à chaque demande de fusion par la CI : mypy `--strict` et 291 tests
+Le tout vérifié à chaque demande de fusion par la CI : mypy `--strict` et 279 tests
 (97 % de couverture) contre la dernière version de Home Assistant, plus
 les validations officielles `hassfest` et HACS (aussi lancées chaque
 semaine pour repérer une version de HA qui casserait l'intégration). C'est une auto-évaluation : Home

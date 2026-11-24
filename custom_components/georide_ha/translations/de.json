@@ -43,6 +43,7 @@
       "plugged": { "name": "Stromversorgung angeschlossen" },
       "online": { "name": "Tracker online" },
       "maintenance_mode": { "name": "Wartungsmodus" },
+      "sleep_mode": { "name": "Schlafmodus" },
       "emergency_call": { "name": "Notruf" },
       "friend_call": { "name": "Anruf an Angehörige" },
       "stolen": { "name": "Gestohlen" },
@@ -72,8 +73,7 @@
     },
     "switch": {
       "eco_mode": { "name": "Eco-Modus" },
-      "fall_detector": { "name": "Sturzerkennung" },
-      "sleep_mode": { "name": "Schlafmodus" }
+      "fall_detector": { "name": "Sturzerkennung" }
     },
     "number": {
       "cutoff_voltage": { "name": "Batterie-Abschaltspannung" }

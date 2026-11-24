@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry, OperationNotAllowed
@@ -116,8 +115,8 @@ async def _async_adopt_legacy_entry(hass: HomeAssistant, entry: ConfigEntry) -> 
 
     HACS installs 0.18 next to the old `georide` folder and leaves that folder
     in place. Moving the old devices and entities to this entry keeps their
-    entity_ids, history, dashboards and automations; the old entry and folder
-    are then removed.
+    entity_ids, history, dashboards and automations; the old entry is then
+    removed. The old folder is left for the user (or HACS) to delete.
     """
     try:
         legacy = await async_get_integration(hass, LEGACY_DOMAIN)
@@ -163,9 +162,6 @@ async def _async_adopt_legacy_entry(hass: HomeAssistant, entry: ConfigEntry) -> 
         )
         await hass.config_entries.async_remove(old.entry_id)
         _LOGGER.info("GeoRide: took over %s from the 0.17 domain", old.title)
-    if not hass.config_entries.async_entries(LEGACY_DOMAIN):
-        # Our own 0.17 folder, left behind by HACS when it installs the renamed integration.
-        await hass.async_add_executor_job(shutil.rmtree, legacy.file_path, True)
 
 
 def _cleanup_stale_devices(
