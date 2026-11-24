@@ -2,7 +2,7 @@
 
 Polls the GeoRide v2 API every 60s (see `GeoRideApiClient.get_trackers`),
 indexes the result by trackerId, and fires Home Assistant events when state
-transitions are detected (lock toggle, moving start/stop) and for each new
+transitions are detected (moving start/stop) and for each new
 tracker event (vibration, movement, …). The v2 API has no realtime socket,
 so alarms arrive with the polling delay. Events let users write event-driven
 automations without polling entities themselves.
@@ -36,7 +36,6 @@ from .const import (
     CONF_LEGACY,
     DOMAIN,
     EVENT_ALARM,
-    EVENT_LOCK,
     EVENT_MOVING,
     LEGACY_DOMAIN,
 )
@@ -343,13 +342,6 @@ class GeoRideCoordinator(DataUpdateCoordinator[TrackersById]):
                 "tracker_id": tid,
                 "tracker_name": tracker.get("trackerName"),
             }
-
-            if isinstance(prev.get("isLocked"), bool) and isinstance(
-                tracker.get("isLocked"), bool
-            ) and prev["isLocked"] != tracker["isLocked"]:
-                self._fire(
-                    EVENT_LOCK, {**base, "is_locked": tracker["isLocked"]}
-                )
 
             if isinstance(prev.get("moving"), bool) and isinstance(
                 tracker.get("moving"), bool

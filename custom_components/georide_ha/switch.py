@@ -38,7 +38,6 @@ class GeoRideSettingSwitchDescription(SwitchEntityDescription):
 
     state_key: str
     set_fn: Callable[[GeoRideApiClient, int, bool], Awaitable[None]]
-    attrs: tuple[str, ...] = ()
 
 
 SETTING_SWITCHES: tuple[GeoRideSettingSwitchDescription, ...] = (
@@ -48,16 +47,6 @@ SETTING_SWITCHES: tuple[GeoRideSettingSwitchDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
         state_key="fallDetector",
         set_fn=lambda client, tid, on: client.set_fall_detector(tid, on),
-    ),
-    GeoRideSettingSwitchDescription(
-        # Applied at the tracker's next connection; GeoRide reports the wait in `pending`.
-        key="sleep_mode",
-        translation_key="sleep_mode",
-        entity_category=EntityCategory.CONFIG,
-        entity_registry_enabled_default=False,  # opt-in: it changes how the tracker works
-        state_key="sleepMode",
-        set_fn=lambda client, tid, on: client.set_sleep_mode(tid, on),
-        attrs=("sleepModePending",),
     ),
 )
 
@@ -159,11 +148,6 @@ class GeoRideSettingSwitch(GeoRideEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         v = self._tracker.get(self.entity_description.state_key)
         return v if isinstance(v, bool) else None
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
-        attrs = self.entity_description.attrs
-        return {"pending": self._tracker.get(attrs[0])} if attrs else None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set(True)

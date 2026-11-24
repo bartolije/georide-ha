@@ -12,6 +12,9 @@
       },
       "friend_call": {
         "default": "mdi:phone-in-talk"
+      },
+      "sleep_mode": {
+        "default": "mdi:sleep"
       }
     },
     "sensor": {
@@ -34,12 +37,6 @@
       },
       "fall_detector": {
         "default": "mdi:motorbike-off"
-      },
-      "sleep_mode": {
-        "default": "mdi:sleep",
-        "state": {
-          "off": "mdi:sleep-off"
-        }
       }
     },
     "number": {

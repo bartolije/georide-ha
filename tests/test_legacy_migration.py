@@ -22,7 +22,7 @@ from custom_components.georide_ha.const import (  # noqa: E402
     CONF_LEGACY,
     DOCUMENTATION_URL,
     DOMAIN,
-    EVENT_LOCK,
+    EVENT_MOVING,
     LEGACY_DOMAIN,
 )
 from custom_components.georide_ha.coordinator import GeoRideCoordinator  # noqa: E402
@@ -88,7 +88,7 @@ class TestAdoption:
             "sensor", LEGACY_DOMAIN, "2216122-odometer",
             config_entry=old, device_id=device.id, suggested_object_id="z900_odometer",
         )
-        with _legacy_integration(), patch("custom_components.georide_ha.shutil.rmtree") as rmtree:
+        with _legacy_integration():
             await _async_adopt_legacy_entry(hass, new)
 
         moved = er.async_get(hass).async_get(entity.entity_id)
@@ -100,19 +100,15 @@ class TestAdoption:
         assert device.config_entry_id == new.entry_id
         assert hass.config_entries.async_get_entry(old.entry_id) is None
         assert new.data[CONF_LEGACY] is True
-        rmtree.assert_called_once_with(Path("/config/custom_components/georide"), True)
 
     async def test_leaves_the_other_georide_integration_alone(self, hass):
         old = _legacy_entry(hass)
         new = MockConfigEntry(domain=DOMAIN, unique_id=EMAIL, data=DATA)
         new.add_to_hass(hass)
-        with _legacy_integration("https://github.com/ptimatth/GeorideHA"), patch(
-            "custom_components.georide_ha.shutil.rmtree"
-        ) as rmtree:
+        with _legacy_integration("https://github.com/ptimatth/GeorideHA"):
             await _async_adopt_legacy_entry(hass, new)
         assert hass.config_entries.async_get_entry(old.entry_id) is not None
         assert CONF_LEGACY not in new.data
-        rmtree.assert_not_called()
 
     async def test_nothing_to_do_without_the_old_folder(self, hass):
         new = MockConfigEntry(domain=DOMAIN, unique_id=EMAIL, data=DATA)
@@ -131,11 +127,11 @@ class TestLegacyNames:
         entry.add_to_hass(hass)
         coord = GeoRideCoordinator(hass, entry, MagicMock())
         fired: list[str] = []
-        hass.bus.async_listen(EVENT_LOCK, lambda e: fired.append(e.event_type))
-        hass.bus.async_listen("georide_lock_event", lambda e: fired.append(e.event_type))
-        coord._fire(EVENT_LOCK, {"is_locked": True})
+        hass.bus.async_listen(EVENT_MOVING, lambda e: fired.append(e.event_type))
+        hass.bus.async_listen("georide_moving_event", lambda e: fired.append(e.event_type))
+        coord._fire(EVENT_MOVING, {"moving": True})
         await hass.async_block_till_done()
-        assert sorted(fired) == ["georide_ha_lock_event", "georide_lock_event"]
+        assert sorted(fired) == ["georide_ha_moving_event", "georide_moving_event"]
 
     async def test_old_service_is_described_without_an_error(self, hass, caplog):
         """HA must not look for a services.yaml in the gone `georide` integration."""

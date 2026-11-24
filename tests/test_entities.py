@@ -3,7 +3,7 @@
 Targets the lines that coordinator/services tests don't cover: entity
 constructors (DeviceInfo, unique_id), value_fn dispatch in sensor and
 binary_sensor descriptions, the device_tracker GPS properties, and the
-lock / switch action paths including their HomeAssistantError
+switch action paths including their HomeAssistantError
 mappings.
 """
 from __future__ import annotations
@@ -16,7 +16,6 @@ from datetime import datetime, timezone  # noqa: E402
 from unittest.mock import AsyncMock, MagicMock  # noqa: E402
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass  # noqa: E402
-from homeassistant.components.lock import LockEntity  # noqa: E402
 from homeassistant.components.sensor import SensorDeviceClass  # noqa: E402
 from homeassistant.const import (  # noqa: E402
     DEGREE,
@@ -44,7 +43,6 @@ from custom_components.georide_ha.binary_sensor import (  # noqa: E402
 )
 from custom_components.georide_ha.const import DOMAIN  # noqa: E402
 from custom_components.georide_ha.device_tracker import GeoRideDeviceTracker  # noqa: E402
-from custom_components.georide_ha.lock import GeoRideLock  # noqa: E402
 from custom_components.georide_ha.sensor import (  # noqa: E402
     BEACON_SENSORS,
     LAST_TRIP_SENSORS,
@@ -557,57 +555,6 @@ class TestDeviceTracker:
 
 
 # ---------------------------------------------------------------------------
-# Lock
-# ---------------------------------------------------------------------------
-class TestLock:
-    async def test_is_locked_true(self):
-        coord = _coordinator()
-        lock = GeoRideLock(coord, TID)
-        assert lock.is_locked is True
-        assert lock.unique_id == f"{TID}-lock"
-
-    async def test_is_locked_none_when_no_data(self):
-        tracker = {"trackerId": TID, "trackerName": "X"}
-        coord = _coordinator(trackers=[tracker])
-        lock = GeoRideLock(coord, TID)
-        assert lock.is_locked is None
-
-    async def test_async_lock_calls_client(self):
-        coord = _coordinator()
-        lock = GeoRideLock(coord, TID)
-        await lock.async_lock()
-        coord.client.lock_tracker.assert_awaited_once_with(TID)
-        coord.async_request_refresh.assert_awaited_once()
-
-    async def test_async_unlock_calls_client(self):
-        coord = _coordinator()
-        lock = GeoRideLock(coord, TID)
-        await lock.async_unlock()
-        coord.client.unlock_tracker.assert_awaited_once_with(TID)
-
-    async def test_auth_error_raises_home_assistant_error(self):
-        coord = _coordinator()
-        coord.client.lock_tracker = AsyncMock(side_effect=GeoRideAuthError("bad"))
-        lock = GeoRideLock(coord, TID)
-        with pytest.raises(HomeAssistantError):
-            await lock.async_lock()
-
-    async def test_connection_error_raises_home_assistant_error(self):
-        coord = _coordinator()
-        coord.client.lock_tracker = AsyncMock(side_effect=GeoRideConnectionError("net"))
-        lock = GeoRideLock(coord, TID)
-        with pytest.raises(HomeAssistantError):
-            await lock.async_lock()
-
-    async def test_generic_api_error_raises(self):
-        coord = _coordinator()
-        coord.client.unlock_tracker = AsyncMock(side_effect=GeoRideError("weird"))
-        lock = GeoRideLock(coord, TID)
-        with pytest.raises(HomeAssistantError):
-            await lock.async_unlock()
-
-
-# ---------------------------------------------------------------------------
 # Switch (eco mode)
 # ---------------------------------------------------------------------------
 class TestEcoModeSwitch:
@@ -676,7 +623,7 @@ class TestEcoModeSwitch:
 
 class TestSettingsEntities:
     FULL = {**TRACKER, "firmwareVersion": 50, "firmwareLatest": 51, "bleFirmwareVersion": 5, "bleFirmwareLatest": 5,
-            "cutoffVoltage": 12.25, "fallDetector": True, "sleepMode": False, "sleepModePending": None, "online": True}
+            "cutoffVoltage": 12.25, "fallDetector": True, "sleepMode": False, "online": True}
 
     def test_firmware_update_available(self):
         coord = _coordinator(trackers=[self.FULL])
@@ -690,8 +637,6 @@ class TestSettingsEntities:
         coord = _coordinator(trackers=[self.FULL])
         n = GeoRideCutoffVoltage(coord, TID)
         assert n.native_value == 12.25 and (n.native_min_value, n.native_max_value) == (11.0, 16.0)
-        assert n.entity_registry_enabled_default is False  # opt-in until tried on a real tracker
-        assert _desc_by_key(SETTING_SWITCHES, "sleep_mode").entity_registry_enabled_default is False
         await n.async_set_native_value(12.5)
         coord.client.set_cutoff_voltage.assert_awaited_once_with(TID, 12.5)
         coord.async_request_refresh.assert_awaited_once()
@@ -705,18 +650,20 @@ class TestSettingsEntities:
     async def test_setting_switches(self):
         coord = _coordinator(trackers=[self.FULL])
         fall = GeoRideSettingSwitch(coord, TID, _desc_by_key(SETTING_SWITCHES, "fall_detector"))
-        sleep = GeoRideSettingSwitch(coord, TID, _desc_by_key(SETTING_SWITCHES, "sleep_mode"))
-        assert fall.is_on is True and fall.extra_state_attributes is None
-        assert sleep.is_on is False and sleep.extra_state_attributes == {"pending": None}
+        assert fall.is_on is True
         await fall.async_turn_off()
-        await sleep.async_turn_on()
         coord.client.set_fall_detector.assert_awaited_once_with(TID, False)
-        coord.client.set_sleep_mode.assert_awaited_once_with(TID, True)
+
+    def test_sleep_mode_is_read_only(self):
+        """Shown as a binary sensor: no command is sent to the tracker."""
+        coord = _coordinator(trackers=[self.FULL])
+        assert GeoRideBinarySensor(coord, TID, _desc_by_key(BINARY_SENSORS, "sleep_mode")).is_on is False
+        assert not [d for d in SETTING_SWITCHES if d.key == "sleep_mode"]
 
     async def test_setting_switch_error_is_translated(self):
         coord = _coordinator(trackers=[self.FULL])
-        coord.client.set_sleep_mode = AsyncMock(side_effect=GeoRideAuthError("401"))
-        sw = GeoRideSettingSwitch(coord, TID, _desc_by_key(SETTING_SWITCHES, "sleep_mode"))
+        coord.client.set_fall_detector = AsyncMock(side_effect=GeoRideAuthError("401"))
+        sw = GeoRideSettingSwitch(coord, TID, _desc_by_key(SETTING_SWITCHES, "fall_detector"))
         with pytest.raises(HomeAssistantError) as err:
             await sw.async_turn_off()
         assert err.value.translation_key == "token_rejected"
@@ -741,7 +688,7 @@ class TestSettingsEntities:
         await update_module.async_setup_entry(hass, entry2, lambda items: added.extend(items))
         await number_module.async_setup_entry(hass, entry2, lambda items: added.extend(items))
         await switch_module.async_setup_entry(hass, entry2, lambda items: added.extend(items))
-        assert len(added) == 2 + 1 + 3  # firmware x2, cutoff, eco + fall + sleep
+        assert len(added) == 2 + 1 + 2  # firmware x2, cutoff, eco + fall
 
 
 # ---------------------------------------------------------------------------
@@ -751,7 +698,6 @@ class TestSettingsEntities:
 from custom_components.georide_ha import (  # noqa: E402
     binary_sensor as bs_module,
     device_tracker as dt_module,
-    lock as lock_module,
     sensor as sensor_module,
     switch as switch_module,
 )
@@ -818,19 +764,6 @@ class TestSetupEntry:
         await dt_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
         assert len(added) == 1
         assert isinstance(added[0], GeoRideDeviceTracker)
-
-    async def test_lock_setup_skips_when_can_lock_and_unlock_false(self, hass):
-        no_ctrl = {**TRACKER, "canLock": False, "canUnlock": False}
-        entry, _ = await _entry_with_coord(hass, trackers=[no_ctrl])
-        added: list = []
-        await lock_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
-        assert added == []
-
-    async def test_lock_setup_creates_when_canLock(self, hass):
-        entry, _ = await _entry_with_coord(hass)
-        added: list = []
-        await lock_module.async_setup_entry(hass, entry, lambda items: added.extend(items))
-        assert len(added) == 1
 
     async def test_switch_setup_creates_eco_mode(self, hass):
         entry, _ = await _entry_with_coord(hass)

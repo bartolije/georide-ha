@@ -43,6 +43,7 @@
       "plugged": { "name": "Alimentación conectada" },
       "online": { "name": "Localizador en línea" },
       "maintenance_mode": { "name": "Modo mantenimiento" },
+      "sleep_mode": { "name": "Modo reposo" },
       "emergency_call": { "name": "Llamada de emergencia" },
       "friend_call": { "name": "Llamada a allegados" },
       "stolen": { "name": "Robada" },
@@ -72,8 +73,7 @@
     },
     "switch": {
       "eco_mode": { "name": "Modo eco" },
-      "fall_detector": { "name": "Detector de caída" },
-      "sleep_mode": { "name": "Modo reposo" }
+      "fall_detector": { "name": "Detector de caída" }
     },
     "number": {
       "cutoff_voltage": { "name": "Tensión de corte de batería" }

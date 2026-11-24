@@ -43,6 +43,7 @@
       "plugged": { "name": "Voeding aangesloten" },
       "online": { "name": "Tracker online" },
       "maintenance_mode": { "name": "Onderhoudsmodus" },
+      "sleep_mode": { "name": "Slaapmodus" },
       "emergency_call": { "name": "Noodoproep" },
       "friend_call": { "name": "Oproep naar naasten" },
       "stolen": { "name": "Gestolen" },
@@ -72,8 +73,7 @@
     },
     "switch": {
       "eco_mode": { "name": "Eco-modus" },
-      "fall_detector": { "name": "Valdetectie" },
-      "sleep_mode": { "name": "Slaapmodus" }
+      "fall_detector": { "name": "Valdetectie" }
     },
     "number": {
       "cutoff_voltage": { "name": "Uitschakelspanning accu" }

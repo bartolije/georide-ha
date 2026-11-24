@@ -71,6 +71,12 @@ BINARY_SENSORS: tuple[GeoRideBinarySensorEntityDescription, ...] = (
         value_fn=lambda d: _bool(d.get("maintenanceMode")),
     ),
     GeoRideBinarySensorEntityDescription(
+        key="sleep_mode",
+        translation_key="sleep_mode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _bool(d.get("sleepMode")),
+    ),
+    GeoRideBinarySensorEntityDescription(
         key="emergency_call",
         translation_key="emergency_call",
         entity_category=EntityCategory.DIAGNOSTIC,
