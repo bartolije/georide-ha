@@ -243,13 +243,14 @@ exemple).
 ## Commandes envoyées au traceur
 
 L'intégration n'envoie au traceur que des commandes confirmées sur un
-vrai traceur (GeoRide 3S, micrologiciel 50) :
+vrai traceur (GeoRide 3S, micrologiciel 50). GeoRide n'applique une
+commande qu'à la prochaine connexion du traceur :
 
 | Commande | Confirmée comment |
 |---|---|
 | Tension de coupure | Le 24/11/2026 : passée de 12,25 V à 12,30 V puis remise à 12,25 V ; chaque valeur a été relue chez GeoRide après l'envoi. |
 | Détecteur de chute | Le 24/11/2026 : désactivé puis réactivé ; chaque état a été relu chez GeoRide après l'envoi. |
-| Mode éco | Le 06/11/2026 : activation puis désactivation acceptées par GeoRide et mises en file pour la prochaine connexion du traceur, comme le fait l'appli. |
+| Mode éco | Le 24/11/2026 : activé depuis l'intégration ; le traceur l'a appliqué à sa connexion suivante et le mode a été relu « eco » chez GeoRide. Le retour au mode normal part par la même commande. |
 
 ## Événements
 
