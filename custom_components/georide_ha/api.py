@@ -324,7 +324,8 @@ class GeoRideApiClient:
             raise GeoRideError(f"Unknown tracker {tracker_id}; refresh trackers first") from err
 
     async def _command(self, tracker_id: int, action: str) -> Any:
-        return await self._request("POST", f"/v1/trackers/{self._tracker_id(tracker_id)}/{action}")
+        # GeoRide answers 415 to a POST without a JSON body, even an empty one.
+        return await self._request("POST", f"/v1/trackers/{self._tracker_id(tracker_id)}/{action}", json={})
 
     async def _optional(self, path: str) -> Any:
         """GET that returns None when the tracker model lacks the feature."""

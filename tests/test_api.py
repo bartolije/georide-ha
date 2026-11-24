@@ -380,6 +380,7 @@ class TestCommands:
         client, session = await _ready_client({("POST", path): _resp(201, {"type": "ecoModeIn", "eta": None})})
         await getattr(client, method)(2216122)
         assert session.calls[0][:2] == ("POST", path)
+        assert session.calls[0][2]["json"] == {}  # without a JSON body GeoRide answers 415
 
     async def test_mode_command_returns_eta_and_rereads_mode(self):
         path = f"/v1/trackers/{TID}/settings/mode/eco"
